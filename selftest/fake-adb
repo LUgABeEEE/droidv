@@ -1,0 +1,225 @@
+#!/usr/bin/env bash
+# selftest/fake-adb —— 假 adb：让 dv 的所有路径在无设备环境下可测
+# 状态目录：$DV_FAKE_STATE（记录 calls.log、控制失败次数）
+set -uo pipefail
+S="${DV_FAKE_STATE:?需要 DV_FAKE_STATE}"
+mkdir -p "$S"
+CALLS="$S/calls.log"
+touch "$CALLS"
+
+# 去掉 -s <serial>
+args=("$@")
+if [ "${args[0]:-}" = "-s" ]; then args=("${args[@]:2}"); fi
+cmd="${args[0]:-}"
+
+record() { printf '%s\n' "$*" >> "$CALLS"; }
+
+# ---- IME 假状态 ----
+IMESTATE="$S/imestate.json"
+ime_init() {
+  [ -f "$IMESTATE" ] && return
+  python3 - "$IMESTATE" <<'PY2'
+import json, sys
+json.dump({"enabled": ["com.baidu.input_mi/.ImeService",
+                       "com.iflytek.inputmethod.miui/.FlyIME",
+                       "com.sohu.inputmethod.sogou.xiaomi/.SogouIME",
+                       "com.xiaomi.type/com.mi.ime.MiInputMethodService"],
+           "default": "com.baidu.input_mi/.ImeService",
+           "show_hw": "1"}, open(sys.argv[1], "w"))
+PY2
+}
+ime_op() {  # $1=list|enable|disable|set  $2=id
+  ime_init
+  python3 - "$IMESTATE" "$1" "${2:-}" "${DV_FAKE_IME_ENABLE_NOOP:-0}" <<'PY2'
+import json, sys
+path, op, val, noop = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4] == "1"
+d = json.load(open(path))
+if op == "list":
+    print("\n".join(d["enabled"]))
+elif op == "enable":
+    if noop:
+        pass                      # 故意不生效，用于测 restore 校验失败
+    elif val not in d["enabled"]:
+        d["enabled"].append(val)
+elif op == "disable":
+    d["enabled"] = [x for x in d["enabled"] if x != val]
+elif op == "set":
+    d["default"] = val
+json.dump(d, open(path, "w"))
+PY2
+}
+
+start_devtools() {   # $1=port
+  local p="$1"
+  # setsid+nohup：父进程退出后不能把端点带走
+  DV_FAKE_PKG="${DV_FAKE_PKG:-com.example.app}" \
+    setsid nohup python3 "$(dirname "${BASH_SOURCE[0]}")/fake-devtools.py" "$p" \
+    >"$S/devtools-$p.log" 2>&1 < /dev/null &
+  echo $! > "$S/devtools-$p.pid"
+  # 等端口就绪（最多 3 s）
+  local i=0
+  while [ "$i" -lt 30 ]; do
+    if curl -s -o /dev/null --max-time 1 "http://127.0.0.1:$p/json/version" 2>/dev/null; then return 0; fi
+    i=$((i+1)); sleep 0.1
+  done
+  return 0
+}
+
+stop_devtools() {    # $1=port
+  local f="$S/devtools-$1.pid"
+  [ -f "$f" ] && { kill "$(cat "$f")" 2>/dev/null; rm -f "$f"; }
+}
+
+case "$cmd" in
+  version) echo "Android Debug Bridge version 1.0.41"; echo "Version 99.0.0-fake" ;;
+  devices)
+    echo "List of devices attached"
+    if [ "${DV_FAKE_TWO_DEVICES:-0}" = "1" ]; then
+      echo "FAKE123              device usb:1-1 product:fake model:FakePad device:fake"
+      echo "FAKE456              device usb:1-2 product:fake model:FakePad2 device:fake"
+    elif [ "${args[1]:-}" = "-l" ]; then
+      echo "FAKE123              device usb:1-1 product:fake model:FakePad device:fake"
+    else
+      echo "FAKE123	device"
+    fi
+    echo "" ;;
+  get-state) echo "device" ;;
+  mdns) echo "List of discovered mdns services" ;;
+  connect) echo "connected to $2" ;;
+  forward)
+    sub="${args[1]:-}"
+    case "$sub" in
+      tcp:*)
+        port="${sub#tcp:}"; sock="${args[2]:-}"
+        record "ADD $port $sock"
+        start_devtools "$port"
+        echo "$port" ;;
+      --list)
+        [ -f "$S/forwards" ] && cat "$S/forwards"
+        ;;
+      --remove)
+        p="${args[2]:-}"; p="${p#tcp:}"
+        record "REMOVE $p"
+        stop_devtools "$p"
+        grep -v "tcp:$p " "$S/forwards" 2>/dev/null > "$S/forwards.tmp" || true
+        mv "$S/forwards.tmp" "$S/forwards" 2>/dev/null || true ;;
+      --remove-all)
+        record "REMOVE_ALL"
+        : > "$S/forwards" ;;
+    esac ;;
+  install)
+    if [ "${DV_FAKE_INSTALL:-ok}" = "restricted" ]; then
+      echo "Performing Streamed Install"; echo "Failure [INSTALL_FAILED_USER_RESTRICTED]"; exit 1
+    fi
+    echo "Performing Streamed Install"; echo "Success" ;;
+  uninstall) echo "Success" ;;
+  logcat)
+    # 造几行 threadtime：3 行属于 12345，1 行属于 999
+    printf '%s\n' \
+"11-02 20:00:00.001 12345 12345 I chromium: [INFO:CONSOLE(1)] hello from test" \
+"11-02 20:00:00.002   999   999 E OtherApp: unrelated line" \
+"11-02 20:00:00.003 12345 12346 W demo: BULK i=0" \
+"11-02 20:00:00.004 12345 12345 E AndroidRuntime: FATAL EXCEPTION: main" ;;
+  exec-out)
+    # exec-out cat <path> / exec-out screencap -p
+    case "${args[1]:-}" in
+      cat)
+        f="${args[2]:-}"
+        case "$f" in
+          /data/local/tmp/dv-rec.mp4) head -c 4096 /dev/zero | tr '\0' 'r' ;;
+              /data/local/tmp/dv-ui.xml)
+            if [ -f "$S/ui.xml" ]; then
+              cat "$S/ui.xml"
+            else
+              # 默认给一棵「合法」的树（含 package=），否则校验会失败、case 结果依赖执行顺序
+              printf '%s\n' "<?xml version='1.0' encoding='UTF-8' standalone='yes' ?><hierarchy rotation=\"0\"><node index=\"0\" text=\"设置\" class=\"android.widget.TextView\" package=\"${DV_FAKE_PKG:-com.example.app}\" content-desc=\"打开设置\" bounds=\"[100,200][300,400]\"/></hierarchy>"
+            fi ;;
+          *) echo "" ;;
+        esac ;;
+      screencap)
+        if [ "${DV_FAKE_SCREENCAP_FAIL_ONCE:-0}" = "1" ]; then
+          sc_f="$S/screencap_once"; n=0; [ -f "$sc_f" ] && n=$(cat "$sc_f"); n=$((n+1)); echo "$n" > "$sc_f"
+          if [ "$n" -le 1 ]; then printf 'x'; exit 0; fi
+        fi
+        printf '\x89PNG\r\n\x1a\n'; head -c 4096 /dev/zero | tr '\0' 'x' ;;
+    esac ;;
+  shell)
+    # 去掉 shell 之后的所有参数
+    sc="${args[*]:1}"
+    case "$sc" in
+      *"getprop ro.product.marketname"*) echo "Fake Pad 9" ;;
+      *"getprop ro.build.version.release"*) echo "17" ;;
+      *"getprop ro.build.version.sdk"*) echo "37" ;;
+      *"getprop ro.mi.os.version.name"*) echo "OS4.0" ;;
+      *"getprop"*"nnapi"*) printf '%s\n' "[ro.nnapi.extensions]: [4]" "[ro.nnapi.feature_level]: [8]" "[persist.vendor.npu.version]: [2.1]" ;;
+      *"getprop"*) echo "[ro.fake]: [1]" ;;
+      *"pm list packages"*)
+        case "$sc" in
+          "pm list packages"|"pm list packages -3")
+            printf '%s\n' "package:com.example.app" "package:com.android.browser" "package:com.other.app" ;;
+        esac
+        # 只要请求的包被"安装"过就返回
+        want="${sc##*pm list packages }"; want="${want%% *}"
+        if [ -z "$want" ] || [ "$want" = "${DV_FAKE_PKG:-com.example.app}" ] || [ "$want" = "${DV_FAKE_PKG:-com.example.app}.debug" ]; then
+          echo "package:${DV_FAKE_PKG:-com.example.app}"
+        fi ;;
+      *"echo FAILONCE"*)
+        fo="$S/failonce"; n=0; [ -f "$fo" ] && n=$(cat "$fo"); n=$((n+1)); echo "$n" > "$fo"
+        if [ "$n" -le "${DV_FAKE_FAIL_ONCE:-1}" ]; then echo "boom once"; exit 1; fi
+        echo "ok" ;;
+      *"dumpsys input_method"*)
+        [ "${DV_FAKE_NO_INPUT_METHOD:-0}" = "1" ] || echo "  mServedView=com.example.app/.MainActivity" ;;
+      *"wm size"*) echo "Physical size: ${DV_FAKE_WM_SIZE:-1200x2608}" ;;
+      *"wm density"*) echo "Physical density: 400" ;;
+      *"dumpsys window"*) echo "  mCurrentFocus=Window{abc u0 ${DV_FAKE_PKG:-com.example.app}/.MainActivity}" ;;
+      *"dumpsys webviewupdate"*) echo "  Current WebView package (name, version): (com.google.android.webview, 150.0)" ;;
+      *"pidof"*) echo "12345" ;;
+      *"/proc/net/unix"*) echo "0000000000000000: 00000002 00000000 00010000 0001 01 99999 @webview_devtools_remote_12345" ;;
+      *"resolve-activity"*) echo "${DV_FAKE_PKG:-com.example.app}/.MainActivity" ;;
+      *"ls -l /dev"*) printf '%s\n' "crw-rw-rw- 1 system system 10, 292 /dev/npu_freq_qos_max" "crw-rw---- 1 system camera 10, 283 /dev/xring_vpu_memmap" ;;
+      *"/vendor/etc/nnapi"*) printf '%s\n' "== /vendor/etc/nnapi/nnapi_service.xml" "<hal><version>1.3</version></hal>" ;;
+      *"dumpsys android.hardware.neuralnetworks"*) echo "NeuralNetworks 1.3 device: 0 name=fake-npu" ;;
+      *"dumpsys neuralnetworks"*) echo "NeuralNetworks 1.3 device: 0 name=fake-npu" ;;
+      *"dumpsys gfxinfo"*)
+        if [ "${DV_FAKE_GFX_EMPTY:-0}" = "1" ]; then
+          echo "Applications Graphics Acceleration Info:"; echo "No valid data for this process"
+        else
+          printf '%s\n' "Total frames rendered: 1234" "Janky frames: 7 (0.57%)" "50th percentile: 6ms" "90th percentile: 9ms" "95th percentile: 12ms" "99th percentile: 21ms"
+        fi ;;
+      *"dumpsys gfxinfo"*) printf '%s\n' "Applications Graphics Acceleration Info:" "** Graphics info for pid 12345 [fake.pkg] **" "Total frames rendered: 1234" "Janky frames: 7 (0.57%)" "50th percentile: 6ms" "90th percentile: 9ms" "95th percentile: 12ms" "99th percentile: 21ms" ;;
+      *"ls -la /data/tombstones"*) echo "ls: /data/tombstones: Permission denied" ;;
+      *"dumpsys activity"*) echo "ANR in com.example.app (com.example.app/.Main)" ;;
+      *"screenrecord"*) : ;;
+      *"ime list -s"*) ime_op list ;;
+      "ime enable "*) ime_op enable "${sc#ime enable }" ;;
+      "ime disable "*) ime_op disable "${sc#ime disable }" ;;
+      "ime set "*) ime_op set "${sc#ime set }" ;;
+      *"settings get secure default_input_method"*)
+        ime_init; python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["default"])' "$IMESTATE" ;;
+      *"settings get secure show_ime_with_hard_keyboard"*)
+        ime_init; python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["show_hw"])' "$IMESTATE" ;;
+      *"rm -f"*) : ;;
+      *"uiautomator dump"*)
+        # 前 N 次失败（默认 2），之后成功
+        n_file="$S/dump_count"; n=0
+        [ -f "$n_file" ] && n=$(cat "$n_file")
+        n=$((n+1)); echo "$n" > "$n_file"
+        fail_until="${DV_FAKE_DUMP_FAIL:-2}"
+        if [ "${DV_FAKE_UI_ALWAYS_FAIL:-0}" = "1" ]; then
+          # 恒失败用 idle-state（触发 dv 的 fail-fast：立即 exit 4）
+          echo "ERROR: could not get idle state." >&2; exit 1
+        fi
+        if [ "$fail_until" != "0" ] && [ "$n" -le "$fail_until" ]; then
+          # 瞬时错误（非 idle）→ 应被重试
+          echo "ERROR: could not get window hierarchy" >&2; exit 1
+        fi
+        echo "UI hierchary dumped to: /data/local/tmp/dv-ui.xml" ;;
+      *"input tap"*) : ;;
+      *"am start"*) echo "Status: ok"; echo "TotalTime: 120" ;;
+      *"am force-stop"*) : ;;
+      *"cat /proc/net/unix"*) echo "0000000000000000: 00000002 00000000 00010000 0001 01 99999 @webview_devtools_remote_12345" ;;
+      *) : ;;
+    esac ;;
+  *) : ;;
+esac
+exit 0

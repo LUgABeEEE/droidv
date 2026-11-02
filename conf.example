@@ -1,0 +1,78 @@
+# dv.conf 示例 —— 复制成 dv.conf 后按需修改
+# 优先级（高 → 低）：命令行参数 > 环境变量 DV_* > 本文件 > 自动探测
+# 注意：本文件只放"默认值"，不要写任何凭据（dv 不读 token / 密码 / 配对码）
+
+# ── 设备 ─────────────────────────────────────────────────────────────
+# 设备序列号，或无线调试地址 <device-ip>:<port>（端口每次可能变，变了就改这里）
+# USB 序列号形如 R58M12ABCDE；无线形如 192.0.2.10:5555（192.0.2.0/24 是 RFC5737 文档用地址）
+# CONF_SERIAL=192.0.2.10:5555
+
+# ── 被测 App ─────────────────────────────────────────────────────────
+# 被测包名（**没有默认值**：不配且命令行也没给 --pkg 时，需要包名的子命令会 exit 2 并说明怎么配）
+# 需要包名：check / cdp / uitree / cycle / wait-until --focus / logcat --pkg / perf --gfxinfo / input
+# CONF_PKG=com.example.app
+
+# 入口 Activity（留空=自动用 cmd package resolve-activity 解析）
+# CONF_ACTIVITY=com.example.app/.MainActivity
+
+# ── 工具链 ───────────────────────────────────────────────────────────
+# adb 绝对路径（默认先找 $ANDROID_HOME/platform-tools/adb，再找 PATH 里的 adb）
+# CONF_ADB=$HOME/Android/Sdk/platform-tools/adb
+
+# 输出根目录（只有 cycle / shot / perf --record 会创建）
+# CONF_OUT=$HOME/.cache/dv/out
+
+# CDP 本地转发端口（默认 9333；被占用会自动往后找）
+# CONF_FORWARD_PORT=9333
+
+# ── 可选 ─────────────────────────────────────────────────────────────
+# npu run 用的 NNAPI demo APK（不写则用 DV_NPU_APK / CONF_APK）
+# CONF_NPU_APK=./npu-demo.apk
+
+# 安装弹窗「继续安装」按钮坐标（默认 846,2002，来自小米平板 2272×3408 实测）
+#   手机等其它分辨率请改成自己的坐标；设 none 则不自动点、改为手动点
+# CONF_INSTALL_TAP=846,2002
+
+# install 默认 APK（不写则依次找 ./app-debug.apk、./env-build/.../app-debug.apk）
+# CONF_APK=./app-debug.apk
+
+# 主机侧网关（可选）：配了之后 doctor 会读 <gateway>/api/mobile-access/lan/status 的 deviceCount
+# 对应环境变量：DV_GATEWAY（本文件里写 CONF_GATEWAY）
+# CONF_GATEWAY=http://192.0.2.10:8080
+
+# uitree / wait-until 的默认 marker（就绪判据；不配=不校验）
+# 对应环境变量：DV_MARKER（本文件里写 CONF_MARKER）
+# CONF_MARKER=[dvmeta:
+
+# ── dv build（Gradle）─────────────────────────────────────────────────
+# JDK / Android SDK（不配则按 JAVA_HOME / ANDROID_HOME / 常见路径找）
+# DV_JAVA=$HOME/.jdks/temurin-21
+# DV_SDK=$HOME/Android/Sdk
+
+# AGP 会往 ANDROID_USER_HOME 里写 debug.keystore.lock：目录存在但不可写会在很后面才炸
+# 默认 ~/.cache/dv/android（dv 会先做写测试，不可写自动退化）
+# DV_ANDROID_USER_HOME=$HOME/.cache/dv/android
+
+# 同理：不可写时 wrapper 报 "Could not create parent directory for lock file"
+# 默认取 $GRADLE_USER_HOME 或 ~/.gradle（同样做写测试 + 退化 + 提示）
+# DV_GRADLE_USER_HOME=$HOME/.gradle
+
+# 构建超时（秒，默认 1800）
+# DV_BUILD_TIMEOUT=1800
+
+# release 变体的签名（不配且工程里也没有 signingConfig 时，dv build --variant release 直接 exit 6）
+# DV_ANDROID_KEYSTORE_FILE=$HOME/.android/release.keystore
+
+# ── 其它 ─────────────────────────────────────────────────────────────
+# 单个 adb 调用的超时秒数（默认 30；设备卡死时 CLI 不会一起挂住）
+# DV_ADB_TIMEOUT=30
+
+# 统一超时预算秒数（默认 30）：uitree 的重试/重启/轮询次数由它派生
+#   retry=/15（30→2 次）、boot=ceil(/4)（30→8 s）、poll=/10（30→3 s，上限 10 轮）
+# DV_TIMEOUT=30
+
+# dv lock 的锁文件路径（默认 ~/.cache/dv/device.lock，不可写退化到 $DV_OUT/device.lock）
+# DV_LOCK_FILE=$HOME/.cache/dv/device.lock
+
+# 只给 selftest 用：跳过假延时（不改变真机路径的派生值）
+# DV_SELFTEST_FAST=1

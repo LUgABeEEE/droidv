@@ -1,0 +1,42 @@
+# 本地配置（每个人一份，不入库）
+dv.conf
+*.conf
+!conf.example
+
+# 构建/环境目录（本地 SDK、gradle 输出等）
+env/
+env-build/
+build/
+.gradle/
+
+# 运行产物
+dv-out/
+out/
+shots/
+cycle-*/
+selftest/live-out/
+selftest/live-*.log
+selftest/live-install.log
+*.png
+*.xml
+
+# 缓存
+.cache/
+node_modules/
+__pycache__/
+*.pyc
+*.tmp
+*.swp
+
+# 日志
+*.log
+
+# 系统垃圾
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 编辑器
+.idea/
+.vscode/
+*.iml

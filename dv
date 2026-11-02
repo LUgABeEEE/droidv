@@ -1,0 +1,164 @@
+#!/usr/bin/env bash
+# dv —— 安卓开发者模式自动化调试工具（单一入口）
+# 版本 0.1.0 · 设备侧全部通过 adb；不写系统路径、不改 PATH/rc
+set -uo pipefail
+
+# 解析自身真实路径：支持通过软链接调用（例如 npm bin shim、ln -s ~/.local/bin/dv）
+_dv_src="${BASH_SOURCE[0]}"
+while [ -L "$_dv_src" ]; do
+  _dv_dir="$(cd -P "$(dirname "$_dv_src")" && pwd)"
+  _dv_src="$(readlink "$_dv_src")"
+  case "$_dv_src" in /*) ;; *) _dv_src="$_dv_dir/$_dv_src" ;; esac
+done
+DV_BIN="$(cd -P "$(dirname "$_dv_src")" && pwd)"
+unset _dv_src _dv_dir
+export DV_BIN
+# shellcheck disable=SC1091
+. "$DV_BIN/lib/common.sh"
+
+usage() {
+  cat <<EOF
+${C_B}dv${C_0} $DV_VERSION — 安卓自动化调试 CLI
+
+${C_B}用法${C_0}
+  dv <子命令> [选项]
+
+${C_B}子命令${C_0}
+  doctor                     环境自检：adb / 设备 / 版本 / 包 / 配对配额 / 悬挂 forward / 焦点
+  check [--json]             连接检查：devices -l + 关键 getprop + mCurrentFocus
+  install [--apk PATH]       安装 debug 包（自动点 HyperOS 安装弹窗；超时判 USER_RESTRICTED）
+  cdp version|list|eval <js>|report [--json]
+                             自动 forward + Android-Package 校验 + 任何退出路径都回收 forward
+  shot [-n N] [-o DIR]       截图归档
+  uitree [--marker M] [--find TEXT] [--json]
+                             rm→dump→三件套校验→sleep 2 重试→3 次后重启轮询
+  cycle [--json]             全链路：重启 → CDP → 截图 → UI 树 → 归档
+  logcat [--pkg P] [--tag T] [--level L] [-n N] [--crash] [--json] [--follow [秒]]
+                             日志取数（按包名/pid/标签/级别过滤）
+  adb [--timeout N] [--allow-danger] -- <命令>    adb 透传（强超时 + 危险命令默认拒绝）
+  perf --gfxinfo <pkg> | --record <秒>           帧统计摘要 / 限时录屏
+  crash [-n N] [--json]      崩溃取证：crash 缓冲 + ANR + tombstone
+  packages [--filter S] [--third-party] [--json]  列出设备上的包名
+  devices [--json]           设备列表（序列号/型号/transport/有线无线）
+  input tap (--text T|--desc D|--xy X,Y) | input text <ASCII> | input key <KEY>
+                             输入注入（坐标从 UI 树现算；非 ASCII 会明确拒绝并给绕开方式）
+  lock acquire|release|status
+                             跨进程设备锁（被占用 → exit 3 并打印持有者）
+  wait-until <谓词> [--timeout N] [--json]
+                             有判定条件的等待：--text/--focus/--expr/--shell/--pkg-visible
+  build [--project DIR] [--variant debug|release] [--install] [--json] [--offline] [--flavor NAME]
+                             从任意 Gradle 安卓工程出 APK（可选安装）
+  ime snapshot|restore|status
+                             IME 快照/按快照恢复/现状（做 ime disable 前必须先 snapshot）
+  npu check|run              NNAPI 设备枚举 / demo 运行
+  selftest                   无设备自测（fake-adb + 假 devtools 端点）
+  help [子命令]              帮助
+
+${C_B}全局选项${C_0}
+  --serial <S>   指定设备（优先于 env / dv.conf）
+  --pkg <P>      被测包名（没有默认值；需要包名的子命令必须给，否则 exit 2）
+  --adb <PATH>   adb 路径（默认 $ADB）
+  --out <DIR>    输出根目录（默认 $OUT_BASE，只有 cycle/shot 会创建）
+  --json         机器可读输出
+  --verbose      打印实际执行的 adb 命令
+  --retry N      失败重试 N 次（只对可重试的 4=取数失败 / 6=校验失败 生效）
+  --no-color     关闭颜色（等价 NO_COLOR=1）
+  注意：全局选项必须写在子命令之前（如 dv --serial X shot）；写在子命令之后会被判为未知选项 → exit 2
+
+${C_B}退出码${C_0}
+  0 成功 · 2 参数错误 · 3 无设备 · 4 取数失败（重试后） · 5 通道不可用（CDP/forward/HTTP）
+  6 校验失败（package/marker/安装被拒/找不到 APK） · 7 环境缺失（adb/SDK/node/JDK）
+  8 构建失败（仅 dv build；Gradle 返回非 0）
+
+${C_Y}红线${C_0}
+  无线调试下不要用 adb reconnect（会摘掉 transport，设备可能再也连不回来）；
+  adb shell 卡住时等超时后重新 adb connect <ip:port>，或让用户重新打开无线调试。
+
+${C_B}例子${C_0}
+  dv doctor
+  dv --pkg com.example.app cdp report --json | jq .android_package
+  dv --pkg com.example.app uitree --find "设置" --json
+  DV_SERIAL=192.0.2.10:5555 dv --pkg com.example.app cycle
+EOF
+}
+
+cmd_help() {
+  local sub="${1:-}"
+  case "$sub" in
+    ''|help) usage; exit "$EX_OK" ;;
+    doctor|check|install|cdp|shot|uitree|cycle|npu|ime|logcat|adb|perf|crash|build|packages|devices|wait-until|input|lock|selftest)
+      local f="$DV_BIN/lib/$sub.sh"
+      if [ -f "$f" ] && grep -q '^dv_help_' "$f"; then
+        # shellcheck disable=SC1090
+        . "$f"; "dv_help_${sub//-/_}"; dv_help_footer; exit "$EX_OK"   # wait-until → dv_help_wait_until
+      fi
+      sed -n '/^usage()/,/^}/p' "$DV_BIN/dv" | head -40; exit "$EX_OK" ;;
+    *) die "$EX_ARG" "未知子命令：$sub（dv help 看全部）" ;;
+  esac
+}
+
+# ---------- 全局参数（只吃子命令之前的选项；之后原样交给子命令） ----------
+SUB=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --serial) SERIAL_SRC=cli; SERIAL="${2:-}";   case "$SERIAL"   in ''|--*|-) die "$EX_ARG" "--serial 需要值（不能以 - 开头）" ;; esac; shift 2 ;;
+    --pkg) PKG_SRC=cli;    PKG="${2:-}";      case "$PKG"      in ''|--*|-) die "$EX_ARG" "--pkg 需要值（不能以 - 开头）" ;; esac; shift 2 ;;
+    --adb) ADB_SRC=cli;    ADB="${2:-}";      case "$ADB"      in ''|--*|-) die "$EX_ARG" "--adb 需要值（不能以 - 开头）" ;; esac; shift 2 ;;
+    --out) OUT_SRC=cli;    OUT_BASE="${2:-}"; case "$OUT_BASE" in ''|--*|-) die "$EX_ARG" "--out 需要值（不能以 - 开头）" ;; esac; shift 2 ;;
+    --json)   JSON_MODE=1; shift ;;
+    --verbose) VERBOSE=1; shift ;;
+    --retry) RETRY_N="${2:-0}"; [ "$#" -ge 2 ] || die "$EX_ARG" "--retry 需要次数"; case "$RETRY_N" in ''|*[!0-9]*) die "$EX_ARG" "--retry 需要非负整数" ;; esac; shift 2 ;;
+    --no-color) NO_COLOR=1; C_R=''; C_G=''; C_Y=''; C_B=''; C_D=''; C_0=''; shift ;;
+    -h|--help) shift; cmd_help "${1:-}"; ;;
+    -*) die "$EX_ARG" "未知全局选项：$1（子命令选项请放在子命令之后）" ;;
+    *) SUB="$1"; shift; break ;;
+  esac
+done
+SUB="${SUB:-help}"
+REST=("$@")
+
+# help 是纯文档、selftest 自带 fake-adb：这两条都不依赖真 adb / 真设备。
+# 其余子命令**也不在这里解析 adb**：参数校验（含「缺值 → exit 2」）必须先生效，
+# 真正需要设备时由 adbr/adbq 惰性解析（发现不了 adb 才 exit 7）。
+case "$SUB" in
+  help) : ;;
+  *) dv_need_python ;;
+esac
+
+case "$SUB" in
+  help) cmd_help "${REST[0]:-}" ;;
+  doctor|check|install|cdp|shot|uitree|cycle|npu|ime|logcat|adb|perf|crash|build|packages|devices|wait-until|input|lock|selftest)
+    f="$DV_BIN/lib/$SUB.sh"
+    [ -f "$f" ] || die "$EX_ENV" "缺少实现：$f"
+    # shellcheck disable=SC1090
+    . "$f"
+    RETRY_N="${RETRY_N:-0}"
+    FN="dv_cmd_${SUB//-/_}"          # wait-until → dv_cmd_wait_until
+    declare -f "$FN" >/dev/null || die "$EX_ENV" "内部错误：缺少函数 $FN"
+    tries=0
+    while :; do
+      "$FN" "${REST[@]}"
+      rc=$?
+      tries=$((tries+1))
+      if [ "$rc" != "4" ] && [ "$rc" != "6" ]; then break; fi
+      if [ "$tries" -gt "$RETRY_N" ]; then break; fi
+      [ "${JSON_MODE:-0}" = "1" ] && printf '{"ok":false,"phase":"retry","attempt":%s,"code":%s}\n' "$tries" "$rc" >&2
+      printf '%s\n' "…第 $tries 次失败（exit $rc），按 --retry 重试" >&2
+      sleep "$(dv_t_retry)"
+    done
+    RETRY_JSON=0
+    [ "${JSON_MODE:-0}" = "1" ] && RETRY_JSON=1
+    for a in "${REST[@]}"; do [ "$a" = "--json" ] && RETRY_JSON=1; done
+    if [ "$tries" -gt 1 ]; then
+      if [ "$rc" = "0" ]; then
+        [ "$RETRY_JSON" = "1" ] && printf '{"ok":true,"phase":"retry","attempts":%s,"outcome":"flaky"}\n' "$tries"
+        printf '%s\n' "…重试后成功（flaky，共 $tries 次尝试）" >&2
+      else
+        [ "$RETRY_JSON" = "1" ] && printf '{"ok":false,"phase":"retry","attempts":%s,"outcome":"failed","code":%s}\n' "$tries" "$rc"
+        printf '%s\n' "…重试后仍失败（failed，共 $tries 次尝试，exit $rc）" >&2
+      fi
+    fi
+    exit "$rc"
+    ;;
+  *) die "$EX_ARG" "未知子命令：$SUB（dv help 看全部）" ;;
+esac
