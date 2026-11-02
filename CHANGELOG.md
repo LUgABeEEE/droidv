@@ -9,6 +9,10 @@
 流程 DSL（`dv run flow.yaml`）、录制回放、自带 MCP server、设备农场、ADB 协议重实现、视频流/输入注入引擎、
 OCR 断言、APK badging 解析 —— 理由与替代方案见 README「明确不做」一节。
 
+## [0.1.2] — 2026-11-02
+
+- 新增 `-V` / `--version`（`npx droidv --version` 可直接查版本）
+
 ## [0.1.1] — 2026-11-02
 
 首个公开修复版（`0.1.0` 是早期构建，已 deprecate）。

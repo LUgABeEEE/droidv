@@ -12,7 +12,7 @@ EX_VERIFY=6    # 校验失败（package / marker / install 被拒）
 EX_ENV=7       # 环境缺失（adb / SDK / node / JDK）
 EX_BUILD=8     # 构建失败（Gradle 返回非 0）—— 仅 dv build
 
-DV_VERSION="0.1.1"
+DV_VERSION="0.1.2"
 DV_HOME="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # ---------- 颜色 ----------

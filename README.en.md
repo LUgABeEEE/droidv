@@ -117,7 +117,7 @@ dv doctor
 ```
 
 ```
-dv doctor  (v0.1.1)
+dv doctor  (v0.1.2)
 ────────────────────────────────────────────
 ✔ adb        /opt/android-sdk/platform-tools/adb  (v1.0.41)
 ✔ 设备       <device-ip>:<port>
