@@ -10,7 +10,7 @@ snapshots, NNAPI enumeration, Gradle builds, package/device inventories, and a d
 Plain bash (small amounts of `python3` / `node`), no install step, no system paths touched, no `PATH` / rc edits.
 
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![version](https://img.shields.io/badge/version-0.1.2-informational.svg)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-0.1.3-informational.svg)](CHANGELOG.md)
 [![shell](https://img.shields.io/badge/shell-bash%204%2B-89e051.svg)](#install)
 [![node](https://img.shields.io/badge/node-%E2%89%A522-339933.svg)](#install)
 
@@ -117,7 +117,7 @@ dv doctor
 ```
 
 ```
-dv doctor  (v0.1.2)
+dv doctor  (v0.1.3)
 ────────────────────────────────────────────
 ✔ adb        /opt/android-sdk/platform-tools/adb  (v1.0.41)
 ✔ 设备       <device-ip>:<port>

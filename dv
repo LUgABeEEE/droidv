@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # dv —— 安卓开发者模式自动化调试工具（单一入口）
-# 版本 0.1.2 · 设备侧全部通过 adb；不写系统路径、不改 PATH/rc
+# 版本 0.1.3 · 设备侧全部通过 adb；不写系统路径、不改 PATH/rc
 set -uo pipefail
 
 # 解析自身真实路径：支持通过软链接调用（例如 npm bin shim、ln -s ~/.local/bin/dv）

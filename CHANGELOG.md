@@ -9,6 +9,12 @@
 流程 DSL（`dv run flow.yaml`）、录制回放、自带 MCP server、设备农场、ADB 协议重实现、视频流/输入注入引擎、
 OCR 断言、APK badging 解析 —— 理由与替代方案见 README「明确不做」一节。
 
+## [0.1.3] — 2026-11-02
+
+- `dv devices` 在没有 adb 时返回 **7（环境缺失）** 而不是 3（无设备）：`adbr` 在命令替换的子 shell 里 `die` 被吞掉，主 shell 拿到空列表误判
+- README：版本徽章、`node ≥22`、`install` 默认不自动点弹窗的表述修正
+- CI：push/PR 跑 `bash -n` + `selftest`；打 `v*` tag 自动发布到 npm（OIDC 可信发布）
+
 ## [0.1.2] — 2026-11-02
 
 - 新增 `-V` / `--version`（`npx droidv --version` 可直接查版本）
