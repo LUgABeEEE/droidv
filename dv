@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # dv —— 安卓开发者模式自动化调试工具（单一入口）
-# 版本 0.1.0 · 设备侧全部通过 adb；不写系统路径、不改 PATH/rc
+# 版本 0.1.1 · 设备侧全部通过 adb；不写系统路径、不改 PATH/rc
 set -uo pipefail
 
 # 解析自身真实路径：支持通过软链接调用（例如 npm bin shim、ln -s ~/.local/bin/dv）
@@ -110,6 +110,7 @@ while [ $# -gt 0 ]; do
     --retry) RETRY_N="${2:-0}"; [ "$#" -ge 2 ] || die "$EX_ARG" "--retry 需要次数"; case "$RETRY_N" in ''|*[!0-9]*) die "$EX_ARG" "--retry 需要非负整数" ;; esac; shift 2 ;;
     --no-color) NO_COLOR=1; C_R=''; C_G=''; C_Y=''; C_B=''; C_D=''; C_0=''; shift ;;
     -h|--help) shift; cmd_help "${1:-}"; ;;
+    -V|--version) printf '%s\n' "dv $DV_VERSION"; exit 0 ;;
     -*) die "$EX_ARG" "未知全局选项：$1（子命令选项请放在子命令之后）" ;;
     *) SUB="$1"; shift; break ;;
   esac

@@ -9,6 +9,20 @@
 流程 DSL（`dv run flow.yaml`）、录制回放、自带 MCP server、设备农场、ADB 协议重实现、视频流/输入注入引擎、
 OCR 断言、APK badging 解析 —— 理由与替代方案见 README「明确不做」一节。
 
+## [0.1.1] — 2026-11-02
+
+首个公开修复版（`0.1.0` 是早期构建，已 deprecate）。
+
+- `selftest` 不再依赖 `jq`（18 处断言改用 `python3`）
+- `install`：`--json` 的 `installed` 改为按 **APK 内的包名**判定；`DV_INSTALL_TAP` 缺省改为 `none`（默认不自动点弹窗，坐标随分辨率/ROM 变化不可靠）
+- `uitree`：失败不再重启 App（默认 exit 4），重启需显式 `--restart-app`；`marker_missing` 独立原因码
+- `doctor`：adb 惰性解析；新增 `wm_size` / `wm_density` / `dpr` / `css_viewport`
+- `ime`：快照按设备序列号隔离，跨设备 `restore` 会被拒绝
+- `check` / `uitree`：不再强制 `--pkg`；`cdp list/version` 无包名时列出全部 target
+- `lock`：争用时恢复可见报错；`selftest` 使用隔离锁目录
+- `logcat`：认 `DV_PKG`
+- `perf`：包未运行时 `exit 6`（`no_frames`）而不是静默返回空数据
+
 ## [0.1.0] — 2026-11-02
 
 首个公开版本。纯 bash（少量 `python3` / `node` / `curl`），无第三方依赖，不做全局安装、不写系统路径、

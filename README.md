@@ -117,7 +117,7 @@ dv doctor
 ```
 
 ```
-dv doctor  (v0.1.0)
+dv doctor  (v0.1.1)
 ────────────────────────────────────────────
 ✔ adb        /opt/android-sdk/platform-tools/adb  (v1.0.41)
 ✔ 设备       <device-ip>:<port>
@@ -491,7 +491,7 @@ cp conf.example dv.conf && $EDITOR dv.conf    # 全部是可选的默认值；dv
 旧版本会按固定坐标 `846,2002` 自动点「继续安装」。**这个默认值已经不可靠**：按钮位置随分辨率、DPI、
 **横竖屏**和 ROM 版本变化，在 2272×3408 的横屏平板上会点到「拒绝」→ `INSTALL_FAILED_USER_RESTRICTED`（`exit 6`）。
 
-所以 0.1.0 起：`DV_INSTALL_TAP` **缺省是 `none`**——不点，弹窗出现后由你手点「继续安装」，
+所以 0.1.1 起：`DV_INSTALL_TAP` **缺省是 `none`**——不点，弹窗出现后由你手点「继续安装」，
 `dv await`（`--json` 时看 `status`）等安装结果；超时会给出明确错误而不是静默失败。
 
 要自动点就显式给坐标：

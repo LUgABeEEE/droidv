@@ -117,7 +117,7 @@ dv doctor
 ```
 
 ```
-dv doctor  (v0.1.0)
+dv doctor  (v0.1.1)
 ────────────────────────────────────────────
 ✔ adb        /opt/android-sdk/platform-tools/adb  (v1.0.41)
 ✔ 设备       <device-ip>:<port>
@@ -495,7 +495,7 @@ Older builds tapped "Continue install" at a fixed `846,2002`. **That default is 
 position depends on resolution, DPI, **orientation** and ROM build — on a 2272×3408 landscape tablet it lands on
 "Reject" and you get `INSTALL_FAILED_USER_RESTRICTED` (`exit 6`).
 
-Since 0.1.0, `DV_INSTALL_TAP` **defaults to `none`** — nothing is tapped; the dialog appears, you tap
+Since 0.1.1, `DV_INSTALL_TAP` **defaults to `none`** — nothing is tapped; the dialog appears, you tap
 "Continue install", and `dv install` waits for the result and fails loudly on timeout instead of silently.
 
 To automate it, give coordinates explicitly:
