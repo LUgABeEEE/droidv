@@ -2,16 +2,16 @@
 
 **「用断言代替截图」的安卓设备自动化调试 CLI。**
 
-一个 `dv` 命令，管住开发者模式下的那堆脏活：装包（自动点掉系统安装弹窗）、WebView CDP 断言、
+一个 `dv` 命令，管住开发者模式下的那堆脏活：装包（可选自动点掉系统安装弹窗）、WebView CDP 断言、
 原生 UI 树、条件等待（`wait-until`）、截图归档、结构化 logcat、崩溃取证（crash 缓冲 + ANR + tombstone）、
 帧统计、**节点定位输入注入**（`input tap --text`）、**跨进程设备锁**（`lock`）、IME 快照、NNAPI 枚举、
 Gradle 出包、包/设备清单、无设备自测。纯 bash（少量 `python3` / `node`），不装东西、不写系统路径、
 不改 `PATH` / rc。
 
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![version](https://img.shields.io/badge/version-0.1.0-informational.svg)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-0.1.2-informational.svg)](CHANGELOG.md)
 [![shell](https://img.shields.io/badge/shell-bash%204%2B-89e051.svg)](#安装)
-[![node](https://img.shields.io/badge/node-%E2%89%A518-339933.svg)](#安装)
+[![node](https://img.shields.io/badge/node-%E2%89%A522-339933.svg)](#安装)
 
 > **真机覆盖由社区补充**，当前每条命令跑到哪一步见[验证状态](#验证状态)；怎么补一条见 [docs/verification.md](docs/verification.md)。
 >
