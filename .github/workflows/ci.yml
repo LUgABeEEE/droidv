@@ -1,0 +1,33 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  selftest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: syntax
+        run: |
+          set -e
+          bash -n dv
+          for f in lib/*.sh selftest/*.sh; do [ -f "$f" ] && bash -n "$f"; done
+          node --check lib/cdp-eval.mjs
+      - name: selftest (no device, fake adb)
+        run: |
+          chmod +x dv selftest/fake-adb
+          ./dv selftest
+      - name: help smoke
+        run: |
+          ./dv --version
+          ./dv help >/dev/null

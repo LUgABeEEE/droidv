@@ -1,0 +1,46 @@
+name: publish
+
+# 只在打 tag（v*）时发布；CI 与发布分离
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write   # npm Trusted Publishing (OIDC) 必需
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+
+      # Trusted Publishing 需要较新的 npm（OIDC 支持）
+      - name: upgrade npm
+        run: npm install -g npm@latest
+
+      - name: verify tag matches package.json
+        run: |
+          set -e
+          tag="${GITHUB_REF_NAME#v}"
+          pkg="$(node -p "require('./package.json').version")"
+          echo "tag=$tag package=$pkg"
+          [ "$tag" = "$pkg" ] || { echo "::error::tag $tag != package.json $pkg"; exit 1; }
+
+      - name: selftest gate
+        run: |
+          chmod +x dv selftest/fake-adb
+          ./dv selftest
+
+      # 走 npm Trusted Publishing（OIDC）：不需要任何长期 token。
+      # 若改用仓库 secret：在 Settings → Secrets 加 NPM_TOKEN，并取消下一行注释。
+      - name: publish (OIDC trusted publishing, with provenance)
+        # env:
+        #   NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --provenance --access public
