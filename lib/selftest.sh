@@ -498,9 +498,11 @@ XML4
   run_dv nosuchcmd >/dev/null 2>&1; rc=$?
   check "未知子命令 → 2" "$EX_ARG" "$rc"
 
-  # adb 缺失 → 7
+  # adb 缺失 → 7（devices 曾因子 shell 吞掉 die 而误报 3）
   DV_ADB=/nonexistent/adb bash "$DV_BIN/dv" doctor >/dev/null 2>&1; rc=$?
   check "adb 缺失 → 7" "$EX_ENV" "$rc"
+  DV_ADB=/nonexistent/adb bash "$DV_BIN/dv" devices >/dev/null 2>&1; rc=$?
+  check "adb 缺失：devices → 7（不是 3）" "$EX_ENV" "$rc"
 
   # help
   run_dv help cdp >/dev/null 2>&1; rc=$?

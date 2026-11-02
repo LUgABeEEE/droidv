@@ -18,7 +18,10 @@ dv_cmd_devices() {
     esac
   done
 
-  local raw; raw="$(adbr devices -l 2>/dev/null | tail -n +2 | grep -v '^$' || true)"
+  # 必须在主 shell 里先解析 adb：`$(adbr …)` 里的 die 只会杀掉子 shell，
+  # 主 shell 会拿着空结果误报「没有在线设备（exit 3）」，掩盖真正原因「缺 adb（exit 7）」。
+  dv_require_adb
+  local raw; raw="$(timeout "$DV_ADB_TIMEOUT" "$ADB" devices -l 2>/dev/null | tail -n +2 | grep -v '^$' || true)"
   local count; count="$(printf '%s\n' "$raw" | grep -c . || true)"
 
   if [ "$json" = "1" ]; then

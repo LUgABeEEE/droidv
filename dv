@@ -121,6 +121,9 @@ REST=("$@")
 # help 是纯文档、selftest 自带 fake-adb：这两条都不依赖真 adb / 真设备。
 # 其余子命令**也不在这里解析 adb**：参数校验（含「缺值 → exit 2」）必须先生效，
 # 真正需要设备时由 adbr/adbq 惰性解析（发现不了 adb 才 exit 7）。
+# help 是纯文档、selftest 自带 fake-adb：这两条都不依赖真 adb / 真设备。
+# 其余子命令**也不在这里解析 adb**：参数校验（含「缺值 → exit 2」）必须先生效，
+# 真正需要设备时由 adbr/adbq 惰性解析（发现不了 adb 才 exit 7）。
 case "$SUB" in
   help) : ;;
   *) dv_need_python ;;
