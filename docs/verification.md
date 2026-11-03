@@ -37,6 +37,14 @@
 | `build --install`（手机） | 未验证 | 平板已验证（复用同一安装路径） |
 | `--retry` | 未验证 | 只对 `4`/`6` 生效；真机只跑过一次「无 flaky」 |
 
+> **2026-11-03 追加**：Xiaomi Redmi Note 8（MIUI 12.5.5 / **Android 11 · SDK 30**，USB）复核 13 条命令
+> （`doctor` / `check` / `shot` / `uitree` / `logcat` / `crash` / `devices` / `packages` / `ime` / `perf` /
+> `cdp version` / `cycle` / `wait-until`），逐条退出码与输出片段见
+> [`verification-logs/2026-11-03-xiaomi-redmi-note-8-android11.log`](verification-logs/2026-11-03-xiaomi-redmi-note-8-android11.log)。
+> 这台补的是**版本段**（Android 11，低于现有 Android 17 覆盖）与 **MIUI 差异**：`ime` 在该 ROM 上返回
+> `exit 4`（`ime list` 被 `SecurityException` 拒绝）、`logcat --pkg` 返回 0 行（全局 `-t` 截断后再按 pid 过滤所致），
+> 两处复现与定位见 PR 描述；`cdp version` / `cycle` 的 `exit 5` 属 release 包无 devtools socket 的**正确结果**。
+
 `dv help` 与 `dv selftest` 不需要设备，不参与状态判定。
 
 > 截至本次发布：真机覆盖为 **2026-11-02 两台设备（Xiaomi 17 Pro Max / Pad 9 Pro Max，Android 17 / 澎湃 OS 4.0）**

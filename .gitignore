@@ -30,6 +30,8 @@ __pycache__/
 
 # 日志
 *.log
+# 例外：真机验证日志按 docs/verification.md §3.5 需要入库
+!docs/verification-logs/*.log
 
 # 系统垃圾
 .DS_Store
