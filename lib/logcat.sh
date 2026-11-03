@@ -9,6 +9,7 @@ dv logcat [--pkg P] [--pid N] [--tag T] [--level V|D|I|W|E] [-n N] [--since T] [
   --pkg P     按进程名过滤（内部用 pidof 取 pid；取不到就退回不过滤并给提示）
   --pid N     直接指定 pid（优先于 --pkg）
   --tag T     只保留该 tag（等价 logcat -s T:*）
+  --all-pids  不按进程过滤（默认按包名 pid 过滤；WebView 子进程的同 tag 日志会被排除）
   --level L   最低级别（V/D/I/W/E），默认 V
   -n N        取最后 N 行（默认 200）
   --since T   透传给 logcat 的 -T（如 '10:00:00.000' 或 '2026-11-02 10:00:00.000'）
@@ -42,7 +43,7 @@ for line in sys.stdin:
 }
 
 dv_cmd_logcat() {
-  local json=$JSON_MODE pkg="" pid="" tag="" level="V" n=200 since="" crash=0 follow=0 follow_secs=30
+  local json=$JSON_MODE pkg="" pid="" tag="" level="V" n=200 since="" crash=0 follow=0 follow_secs=30 all_pids=0
   while [ $# -gt 0 ]; do
     case "$1" in
       --json) json=1; shift ;;
@@ -52,6 +53,7 @@ dv_cmd_logcat() {
       --level) level="${2:-V}"; [ "$#" -ge 2 ] || die "$EX_ARG" "$1 需要值"; shift 2 ;;
       -n) n="${2:-200}"; [ "$#" -ge 2 ] || die "$EX_ARG" "$1 需要值"; shift 2 ;;
       --since) since="${2:-}"; [ "$#" -ge 2 ] || die "$EX_ARG" "$1 需要值"; shift 2 ;;
+      --all-pids) all_pids=1; shift ;;
       --crash) crash=1; shift ;;
       --follow) follow=1
         case "${2:-}" in ''|--*) shift ;; *) follow_secs="$2"; [ "$#" -ge 2 ] || die "$EX_ARG" "$1 需要值"; shift 2 ;; esac ;;
@@ -90,18 +92,31 @@ dv_cmd_logcat() {
   [ -n "$raw" ] || { warn "logcat 没有返回内容（缓冲区空或没有匹配）"; [ "$json" = "1" ] && printf '{"ok":true,"lines":0,"items":[]}\n'; return "$EX_OK"; }
 
   # 客户端过滤（pid）+ 截断
-  local filtered
-  filtered="$(printf '%s\n' "$raw" | awk -v pid="$pid" -v n="$n" '
-    { lines[NR] = $0 }
-    END {
-      c = 0
-      for (i = 1; i <= NR; i++) {
-        if (pid != "" && lines[i] !~ (" " pid " ")) continue
-        buf[++c] = lines[i]
+  local filtered pid_filter=0
+  [ "$all_pids" = "1" ] && pid=""
+  [ -n "$pid" ] && pid_filter=1
+  filtered="$(printf '%s\n' "$raw" | awk -v pids="$pid" -v n="$n" '
+    BEGIN { split(pids, pset, " ") }
+    {
+      keep = 1
+      if (pids != "") {
+        keep = 0
+        for (k in pset) if (pset[k] != "" && $3 == pset[k]) { keep = 1; break }
       }
+      if (keep) buf[++c] = $0
+    }
+    END {
       start = (c - n > 0) ? c - n + 1 : 1
       for (i = start; i <= c; i++) print buf[i]
     }')"
+  if [ "$pid_filter" = "1" ]; then
+    local total kept
+    total=$(printf '%s\n' "$raw" | grep -cE '^[0-9][0-9]-[0-9][0-9] ' || true)
+    kept=$(printf '%s\n' "$filtered" | grep -cE '^[0-9][0-9]-[0-9][0-9] ' || true)
+    if [ "$total" -gt "$kept" ]; then
+      warn "按进程（$pid）过滤掉 $((total - kept)) 行，可能来自 WebView 子进程等；加 --all-pids 可全部保留"
+    fi
+  fi
 
   if [ "$json" = "1" ]; then
     printf '%s\n' "$filtered" | _logcat_to_json | python3 -c '

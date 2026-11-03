@@ -181,7 +181,7 @@ print(json.dumps(hits[:20], ensure_ascii=False))
   [ -n "$dump_out" ] && printf '%s' "$xml" > "$dump_out"
 
   if [ "$json" = "1" ]; then
-    printf '{"ok":true,"serial":%s,"pkg":%s,"attempts":%s,"stats":%s,"matches":%s}\n' \
+    printf '{"ok":true,"serial":%s,"pkg":%s,"attempts":%s,"stats":%s,"matches":%s,"hint":"要读界面内容用 dv peek（本命令默认不输出节点文本）"}\n' \
       "$(jstr "$SERIAL")" "$(jstr "$PKG")" "$(jnum "$attempt")" "${stats:-null}" "${found:-[]}"
     return "$EX_OK"
   fi

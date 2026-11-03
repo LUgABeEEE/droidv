@@ -127,7 +127,7 @@ case "$cmd" in
         f="${args[2]:-}"
         case "$f" in
           /data/local/tmp/dv-rec.mp4) head -c 4096 /dev/zero | tr '\0' 'r' ;;
-              /data/local/tmp/dv-ui.xml)
+              *.xml)   # uitree 用 /data/local/tmp/dv-ui.xml，peek 用 /sdcard/dv-peek.xml：都按同一份假树供应
             if [ -f "$S/ui.xml" ]; then
               cat "$S/ui.xml"
             else

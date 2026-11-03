@@ -141,6 +141,18 @@ XML
   out="$(DV_FAKE_UI_ALWAYS_FAIL=1 DV_FAKE_DUMP_FAIL=0 run_dv uitree --json)"; rc=$?
   check "uitree 始终失败 → 4" "$EX_DATA" "$rc"
 
+  # peek：文本优先（fake UI 树 → 摘要）
+  rm -f "$DV_FAKE_STATE/dump_count" "$DV_FAKE_STATE/ui.xml"
+  cat > "$DV_FAKE_STATE/ui.xml" <<'XML'
+<?xml version='1.0' encoding='UTF-8' standalone='yes' ?><hierarchy rotation="0"><node index="0" text="" resource-id="" class="android.widget.FrameLayout" package="com.example.app" content-desc="" bounds="[0,0][2272,3408]"><node index="0" text="取消连接" resource-id="" class="android.widget.Button" package="com.example.app" content-desc="" clickable="true" bounds="[100,200][300,260]"/><node index="1" text="无线调试" resource-id="" class="android.widget.TextView" package="com.example.app" content-desc="" clickable="false" bounds="[0,0][400,100]"/></node></hierarchy>
+XML
+  out="$(DV_FAKE_DUMP_FAIL=0 run_dv --json peek --no-cdp)"; rc=$?
+  check "peek 文本摘要（--no-cdp）" "$EX_OK" "$rc" 'printf "%s" "$out" | grep -q "\"backend\":\"uitree\"" && printf "%s" "$out" | grep -q "取消连接"'
+  out="$(run_dv peek --limit abc)"; rc=$?
+  check "peek --limit 非数字 → 2" "$EX_ARG" "$rc"
+  out="$(DV_FAKE_UI_ALWAYS_FAIL=1 DV_FAKE_DUMP_FAIL=0 run_dv peek --no-cdp --json)"; rc=$?
+  check "peek 取不到 UI 树 → 4" "$EX_DATA" "$rc"
+
   # shot
   out="$(run_dv shot --json -n 2 -o "$ST/out/shots")"; rc=$?
   check "shot --json -n 2" "$EX_OK" "$rc" \
@@ -507,6 +519,14 @@ XML4
   # help
   run_dv help cdp >/dev/null 2>&1; rc=$?
   check "help cdp" "$EX_OK" "$rc"
+
+  # logcat --all-pids：help 里有说明，且参数不再被当成错误（曾把跨进程日志静默丢掉）
+  help_out="$(run_dv help logcat 2>/dev/null || true)"
+  case "$help_out" in *--all-pids*) rc=0 ;; *) rc=1 ;; esac
+  check "help logcat 提到 --all-pids" "$EX_OK" "$rc"
+  run_dv logcat --all-pids -n 1 >/dev/null 2>&1; rc=$?
+  [ "$rc" = "$EX_ARG" ] && rc_bad=1 || rc_bad=0
+  check "logcat --all-pids 参数被接受" "$EX_OK" "$rc_bad"
 
   say ""
   if [ "$fail" = "0" ]; then

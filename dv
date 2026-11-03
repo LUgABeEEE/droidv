@@ -29,7 +29,9 @@ ${C_B}子命令${C_0}
   install [--apk PATH]       安装 debug 包（自动点 HyperOS 安装弹窗；超时判 USER_RESTRICTED）
   cdp version|list|eval <js>|report [--json]
                              自动 forward + Android-Package 校验 + 任何退出路径都回收 forward
-  shot [-n N] [-o DIR]       截图归档
+  peek [--json] [--limit N] [--all] [--no-cdp]
+                             读界面首选：CDP(~150ms)→UI 树摘要，文本不产生像素
+  shot [-n N] [-o DIR]       截图归档（要像素才用；只想读内容用 peek）
   uitree [--marker M] [--find TEXT] [--json]
                              rm→dump→三件套校验→sleep 2 重试→3 次后重启轮询
   cycle [--json]             全链路：重启 → CDP → 截图 → UI 树 → 归档
@@ -78,6 +80,7 @@ ${C_B}例子${C_0}
   dv doctor
   dv --pkg com.example.app cdp report --json | jq .android_package
   dv --pkg com.example.app uitree --find "设置" --json
+  dv peek --json            # 屏幕上有啥：文本 + 可点元素，不截图
   DV_SERIAL=192.0.2.10:5555 dv --pkg com.example.app cycle
 EOF
 }
@@ -86,7 +89,7 @@ cmd_help() {
   local sub="${1:-}"
   case "$sub" in
     ''|help) usage; exit "$EX_OK" ;;
-    doctor|check|install|cdp|shot|uitree|cycle|npu|ime|logcat|adb|perf|crash|build|packages|devices|wait-until|input|lock|selftest)
+    doctor|check|install|cdp|peek|shot|uitree|cycle|npu|ime|logcat|adb|perf|crash|build|packages|devices|wait-until|input|lock|selftest)
       local f="$DV_BIN/lib/$sub.sh"
       if [ -f "$f" ] && grep -q '^dv_help_' "$f"; then
         # shellcheck disable=SC1090
@@ -131,7 +134,7 @@ esac
 
 case "$SUB" in
   help) cmd_help "${REST[0]:-}" ;;
-  doctor|check|install|cdp|shot|uitree|cycle|npu|ime|logcat|adb|perf|crash|build|packages|devices|wait-until|input|lock|selftest)
+  doctor|check|install|cdp|peek|shot|uitree|cycle|npu|ime|logcat|adb|perf|crash|build|packages|devices|wait-until|input|lock|selftest)
     f="$DV_BIN/lib/$SUB.sh"
     [ -f "$f" ] || die "$EX_ENV" "缺少实现：$f"
     # shellcheck disable=SC1090

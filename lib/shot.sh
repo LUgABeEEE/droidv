@@ -54,6 +54,7 @@ dv_cmd_shot() {
     return "$EX_OK"
   fi
   ok "截图 ${#files[@]} 张 → $dir"
+  hint "只要界面内容（文本/可点元素）用 dv peek：约 0.6k token，截图读图要 1.5k+ 且靠人看"
   local i3=0
   while [ "$i3" -lt "${#files[@]}" ]; do
     printf '  %s  %sms  %sB\n' "${files[$i3]}" "${times[$i3]}" "$(stat -c %s "${files[$i3]}")"

@@ -9,6 +9,24 @@
 流程 DSL（`dv run flow.yaml`）、录制回放、自带 MCP server、设备农场、ADB 协议重实现、视频流/输入注入引擎、
 OCR 断言、APK badging 解析 —— 理由与替代方案见 README「明确不做」一节。
 
+## [0.1.4] — 2026-11-04
+
+- `dv logcat`：**不再静默丢掉跨进程的同 tag 日志**。真机取证时踩到过：WebView 的 `chromium` 日志有一部分来自子进程（渲染/网络进程），按包名 pid 过滤会把它们悄悄丢掉（同一 run 原始 12 行只回 1 行）。现在：
+  - `pidof` 返回**全部** pid（原来只取第一个）；
+  - 过滤按 threadtime 的 pid 列精确匹配（原来是子串匹配，可能被同号 tid 误命中）；
+  - 真的过滤掉行时**明确告警**并提示 `--all-pids`；
+  - 新增 `--all-pids`：不做进程过滤，保留所有同 tag 日志。
+- `selftest` 增加两条（`help logcat` 提到 `--all-pids`、`--all-pids` 参数被接受）。
+- **新增 `dv peek`：读界面的首选命令**（真机实测驱动）。原来想「看屏幕上有什么」只有两条路：
+  `dv shot`（411 KB PNG ≈ 1.5k token，还得人/视觉模型读 5–20 s）或 `dv uitree --dump-out`
+  （**55 KB XML ≈ 14k token**）——都比截图贵或更麻烦，于是调用方一律退化成截图。`peek` 现在：
+  - 后端① CDP：前台是 WebView App 时直接取 `innerText`（实测 52–150 ms）；
+  - 后端② UI 树摘要：任意界面，按阅读顺序输出「坐标 + 文本 + 类名」，可点元素用 `▸` 标记，默认 60 项（**约 0.6k token**）；
+  - 屏幕休眠时**先给结论再退出**（`mWakefulness=Asleep` → `exit 4` + 提示唤醒），不再空转 3 次 dump；
+  - `--dump-out` 才落盘原始 XML（默认丢弃——它才是 context 杀手）。
+- `dv shot` 成功后提示「只要内容用 `dv peek`」；`dv uitree --json` 增加 `hint` 字段指路（默认不输出节点文本，容易误判成「什么都没有」）。
+- `selftest` 增加 3 条（peek 摘要 / `--limit` 非法 / 取不到树 → 4），总数 104 → 107。
+
 ## [0.1.3] — 2026-11-02
 
 - `dv devices` 在没有 adb 时返回 **7（环境缺失）** 而不是 3（无设备）：`adbr` 在命令替换的子 shell 里 `die` 被吞掉，主 shell 拿到空列表误判

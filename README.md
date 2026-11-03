@@ -9,7 +9,7 @@ Gradle 出包、包/设备清单、无设备自测。纯 bash（少量 `python3`
 不改 `PATH` / rc。
 
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![version](https://img.shields.io/badge/version-0.1.3-informational.svg)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-0.1.4-informational.svg)](CHANGELOG.md)
 [![shell](https://img.shields.io/badge/shell-bash%204%2B-89e051.svg)](#安装)
 [![node](https://img.shields.io/badge/node-%E2%89%A522-339933.svg)](#安装)
 
@@ -190,13 +190,34 @@ dv --pkg com.example.app input tap --text "保存"       # 坐标从树现算，
 | `dv doctor [--json] [--print-config]` | 环境自检：adb / 设备 / 版本 / 包 / 配对配额（需 `DV_GATEWAY`）/ 悬挂 forward / 焦点 / IME 基线。`--print-config` 只打印「生效值 + 来源（cli/env/conf/auto）」，不碰设备。**不需要包名** |
 | `dv devices [--json]` | 设备清单：序列号 / 状态 / 型号 / `product:device` / transport / 有线或无线；**没有在线设备时 `exit 3`** 并给 USB/无线提示 |
 | `dv packages [--filter SUBSTR] [--third-party] [--json]` | 列出设备上的包名；`--third-party` 只看第三方。**忘记包名时先跑它** |
-| `dv shot [-n N] [-o DIR] [--json]` | 截图归档，逐张记录耗时 |
+| `dv peek [--json] [--limit N] [--all] [--no-cdp] [--dump-out FILE]` | **读界面首选**：CDP（~150 ms，WebView 内）→ UI 树摘要（~3 s，通用）；给「坐标 + 文本 + 类名」，可点元素标 `▸`，**不产生像素**。约 0.6k token（截图读图 1.5k+、原始 XML 14k） |
+| `dv shot [-n N] [-o DIR] [--json]` | 截图归档，逐张记录耗时。**要像素才用**；只想知道界面内容用 `peek` |
 | `dv uitree [--marker M] [--find TEXT] [--json] [--dump-out FILE] [--timeout N]` | 原生 UI 树：`rm → dump → 三件套校验 → 重试 → 重启轮询`；`idle-state` 失败**立即 exit 4**（约 50 ms，不再空耗 3×11 s） |
 | `dv wait-until <--text T\|--focus PKG\|--expr JS\|--shell CMD\|--pkg-visible PKG> [--timeout N] [--interval S] [--json]` | **有判定条件的等待**：命中 `exit 0`，超时 `exit 4` 并给出「等了多久 / 最后观察到的状态 / 排查建议」（`--json` 里是 `last_state`） |
 | `dv cycle [--json] [--no-cdp]` | 全链路组合：重启 → CDP → 截图 → UI 树 → 归档到 `cycle-<ts>/` |
 | `dv logcat [--pkg P] [--pid N] [--tag T] [--level V\|D\|I\|W\|E] [-n N] [--since T] [--crash] [--json] [--follow [秒]]` | 日志取数：按进程/pid/tag/级别过滤，`--json` 每行一个对象，`--follow` 限时跟流 |
 | `dv crash [-n N] [--json]` | 崩溃取证：`logcat -b crash` + ANR 摘要 + `/data/tombstones` 列表（读不到如实说明，不算失败） |
 | `dv perf --gfxinfo <pkg> [--json]` / `dv perf --record <秒> [-o DIR]` | 帧统计摘要（总帧/掉帧/p50/p90/p95/p99）或限时录屏并拉回 |
+
+### 先 `peek`，别急着截图
+
+「看一眼」有三种代价，真机实测（同一页面、同一 Wi-Fi）：
+
+| 取数方式 | 回来多少字节 | token 量级 | 谁来判断 |
+|---|---|---|---|
+| `dv peek` | ~60 行文本 | **~0.6k** | 代码与模型都能直接读 |
+| `dv shot` | 411 KB PNG | ~1.5k（视觉模型）+ 人读 5–20 s | 人 / 视觉模型 |
+| `dv uitree --dump-out` | **55 KB XML** | **~14k** | 需要精确节点树时才值 |
+
+所以默认顺序是 `peek` → （不够再）`uitree` → （必须看像素才）`shot`。
+`peek` 自动选后端：前台是 WebView App 就走 CDP（`innerText`，52–150 ms），否则退回 UI 树摘要（~3 s）。
+
+```bash
+dv peek                      # 屏幕上有什么：坐标 + 文本，可点元素带 ▸
+dv peek --json | jq '.items[:5]'
+dv peek --limit 200 --all    # 全列
+dv peek --no-cdp             # 强制走 UI 树
+```
 
 ### 驱动（要改设备状态，慎用）
 
