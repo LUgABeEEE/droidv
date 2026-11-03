@@ -9,6 +9,19 @@
 流程 DSL（`dv run flow.yaml`）、录制回放、自带 MCP server、设备农场、ADB 协议重实现、视频流/输入注入引擎、
 OCR 断言、APK badging 解析 —— 理由与替代方案见 README「明确不做」一节。
 
+## [0.1.5] — 2026-11-04
+
+社区真机验证（PR #1：Xiaomi Redmi Note 8 / MIUI 12.5 / Android 11 / Windows 主机）暴露的 6 个问题：
+
+- **`ime list -s` 被 ROM 拒绝时不再误报**：MIUI 12.5/A11 上 `uid 2000` 没有 `WRITE_SECURE_SETTINGS`，`ime list -s` 抛 `SecurityException`。原来 `doctor` 会说「0 个启用 IME、默认不在列表」、`ime snapshot` 直接 `exit 4`。现在识别为 ROM 限制：`doctor` 输出 `ime_query_blocked:true` 并跳过判断；`ime snapshot` → `{"ok":true,"blocked":true}` 且 `exit 0`；`ime restore` 降级为「按快照下发 + 无法校验」。
+- **`logcat --pkg` 在忙设备上返回 0 行仍报 ok**：原来先取全局 `-t` 窗口再本地过滤，目标进程的行早被挤出。现在 pid 已知时走**服务端 `--pid=`**（多 pid 逐个取再按时间归并；老 logcat 不认就退回全局取窗），并修掉「取好之后又被无条件重取覆盖」的坑（那会把 18 万行全拉回本地）。
+- **Windows/MSYS 主机 `uitree` 默认 `exit 4`**：Git Bash 会把设备侧路径 `/data/local/tmp/x` 改写成本机路径。`dv` 入口在 `MINGW*/MSYS*/CYGWIN*` 下自动导出 `MSYS_NO_PATHCONV=1` / `MSYS2_ARG_CONV_EXCL='*'`。
+- **Windows 下 UI 树 JSON 崩 `'\udcae' surrogates not allowed`**：统一导出 `PYTHONIOENCODING=utf-8` / `PYTHONUTF8=1`。
+- **`model` 恒为空**：只读 `ro.product.marketname`（Redmi 上为空）。新增回退链 `marketname → model → vendor.model`（`dv_device_model`）。
+- **无设备时 `doctor --json` 崩 `css_w: unbound variable`**：`_dv_screen_json` 初始化 `css_w`/`css_h`，JSON 不再残缺。
+
+`selftest` 107 → 110（机型回退链 / ROM 拒 IME → snapshot blocked / doctor 标 `ime_query_blocked`）。
+
 ## [0.1.4] — 2026-11-04
 
 - `dv logcat`：**不再静默丢掉跨进程的同 tag 日志**。真机取证时踩到过：WebView 的 `chromium` 日志有一部分来自子进程（渲染/网络进程），按包名 pid 过滤会把它们悄悄丢掉（同一 run 原始 12 行只回 1 行）。现在：

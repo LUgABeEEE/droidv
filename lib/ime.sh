@@ -23,8 +23,14 @@ _ime_snapshot_path() {
   printf '%s/dv/ime-snapshot-%s.json' "${XDG_CACHE_HOME:-$HOME/.cache}" "$ser"
 }
 
-_ime_enabled() {   # 每行一个 IME id
-  adbq shell 'ime list -s' 2>/dev/null | tr -d '\r' | grep -v '^$'
+DV_IME_BLOCKED="__dv_ime_blocked__"
+_ime_enabled() {   # 每行一个 IME id；ROM 拒绝查询时给哨兵行（MIUI 12.5/A11：uid 2000 没有 WRITE_SECURE_SETTINGS）
+  local raw
+  raw="$(adbq shell 'ime list -s' 2>&1 | tr -d '\r')"
+  case "$raw" in
+    *SecurityException*|*WRITE_SECURE_SETTINGS*|*"Permission denial"*) printf '%s\n' "$DV_IME_BLOCKED"; return 0 ;;
+  esac
+  printf '%s\n' "$raw" | grep -v '^$'
 }
 _ime_default() { adbq shell 'settings get secure default_input_method' 2>/dev/null | tr -d '\r'; }
 _ime_show_hw() { adbq shell 'settings get secure show_ime_with_hard_keyboard' 2>/dev/null | tr -d '\r'; }
@@ -62,6 +68,15 @@ dv_cmd_ime() {
     snapshot)
       local enabled def showhw dir
       enabled="$(_ime_enabled)"; def="$(_ime_default)"; showhw="$(_ime_show_hw)"
+      if printf '%s\n' "$enabled" | grep -qxF "$DV_IME_BLOCKED"; then
+        if [ "$json" = "1" ]; then
+          printf '{"ok":true,"blocked":true,"snapshot":null,"reason":"ime list denied by ROM (WRITE_SECURE_SETTINGS)"}\n'
+        else
+          warn "ROM 拒绝 ime list（SecurityException: WRITE_SECURE_SETTINGS）——本机无法快照；这不是 dv 的故障"
+          hint "MIUI 12.5 / Android 11 的已知限制；需要快照时改用 USB 调试授权后重试，或手工记录 IME 列表"
+        fi
+        return "$EX_OK"
+      fi
       [ -n "$enabled" ] || { err "读不到已启用的 IME 列表"; return "$EX_DATA"; }
 
       dir="$(dirname "$snap")"
@@ -133,6 +148,15 @@ PY
       # 回读校验
       local now_list now_def missing extra
       now_list="$(_ime_enabled)"; now_def="$(_ime_default)"
+      if printf '%s\n' "$now_list" | grep -qxF "$DV_IME_BLOCKED"; then
+        if [ "$json" = "1" ]; then
+          printf '{"ok":true,"blocked":true,"snapshot":%s,"verified":false,"reason":"ime list denied by ROM"}\n' "$(jstr "$snap")"
+        else
+          ok "IME 已按快照下发（enable + set）"
+          warn "但 ROM 拒绝回读 ime list，无法校验一致性 —— 这不算失败"
+        fi
+        return "$EX_OK"
+      fi
       missing="$(comm -23 <(printf '%s\n' "$want_list" | sort) <(printf '%s\n' "$now_list" | sort) | tr '\n' ' ')"
       extra="$(comm -13 <(printf '%s\n' "$want_list" | sort) <(printf '%s\n' "$now_list" | sort) | tr '\n' ' ')"
       local ok_flag=0

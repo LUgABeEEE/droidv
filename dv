@@ -1,7 +1,15 @@
 #!/usr/bin/env bash
 # dv —— 安卓开发者模式自动化调试工具（单一入口）
-# 版本 0.1.3 · 设备侧全部通过 adb；不写系统路径、不改 PATH/rc
+# 版本 0.1.5 · 设备侧全部通过 adb；不写系统路径、不改 PATH/rc
 set -uo pipefail
+
+# Windows/MSYS 主机：别让 shell 把设备侧路径改写成本机路径（/data/local/tmp/x → C:/Program Files/Git/...）
+# 现场（PR #1，Redmi Note 8 + Git Bash）：uitree 默认 exit 4，加 MSYS_NO_PATHCONV=1 才正常
+case "$(uname -s 2>/dev/null)" in
+  MINGW*|MSYS*|CYGWIN*) export MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' ;;
+esac
+# python 子进程统一 UTF-8：Windows 默认 cp936 读 UI 树 XML 会炸 '\udcae' surrogates not allowed
+export PYTHONIOENCODING=utf-8 PYTHONUTF8=1
 
 # 解析自身真实路径：支持通过软链接调用（例如 npm bin shim、ln -s ~/.local/bin/dv）
 _dv_src="${BASH_SOURCE[0]}"

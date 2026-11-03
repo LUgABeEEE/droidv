@@ -147,7 +147,8 @@ case "$cmd" in
     # 去掉 shell 之后的所有参数
     sc="${args[*]:1}"
     case "$sc" in
-      *"getprop ro.product.marketname"*) echo "Fake Pad 9" ;;
+      *"getprop ro.product.marketname"*)
+        if [ "${DV_FAKE_NO_MARKETNAME:-0}" = "1" ]; then printf '%s\n' "" "Redmi Note 8"; else echo "Fake Pad 9"; fi ;;
       *"getprop ro.build.version.release"*) echo "17" ;;
       *"getprop ro.build.version.sdk"*) echo "37" ;;
       *"getprop ro.mi.os.version.name"*) echo "OS4.0" ;;
@@ -190,7 +191,12 @@ case "$cmd" in
       *"ls -la /data/tombstones"*) echo "ls: /data/tombstones: Permission denied" ;;
       *"dumpsys activity"*) echo "ANR in com.example.app (com.example.app/.Main)" ;;
       *"screenrecord"*) : ;;
-      *"ime list -s"*) ime_op list ;;
+      *"ime list -s"*)
+        if [ "${DV_FAKE_IME_DENIED:-0}" = "1" ]; then
+          echo "java.lang.SecurityException: uid 2000 does not have android.permission.WRITE_SECURE_SETTINGS" >&2
+          exit 1
+        fi
+        ime_op list ;;
       "ime enable "*) ime_op enable "${sc#ime enable }" ;;
       "ime disable "*) ime_op disable "${sc#ime disable }" ;;
       "ime set "*) ime_op set "${sc#ime set }" ;;

@@ -153,6 +153,14 @@ XML
   out="$(DV_FAKE_UI_ALWAYS_FAIL=1 DV_FAKE_DUMP_FAIL=0 run_dv peek --no-cdp --json)"; rc=$?
   check "peek 取不到 UI 树 → 4" "$EX_DATA" "$rc"
 
+  # PR #1（Redmi Note 8 / MIUI 12.5 / Android 11）暴露的三条差异
+  out="$(DV_FAKE_NO_MARKETNAME=1 run_dv check --json)"; rc=$?
+  check "机型回退链：marketname 空 → model" "$EX_OK" "$rc" 'printf "%s" "$out" | grep -q "Redmi Note 8"'
+  out="$(DV_FAKE_IME_DENIED=1 run_dv ime snapshot --json)"; rc=$?
+  check "ROM 拒 ime list → snapshot 标 blocked 不报错" "$EX_OK" "$rc" 'printf "%s" "$out" | grep -q "\"blocked\":true"'
+  out="$(DV_FAKE_IME_DENIED=1 run_dv doctor --json)"; rc=$?
+  check "ROM 拒 ime list → doctor 标 ime_query_blocked" "$EX_OK" "$rc" 'printf "%s" "$out" | grep -q "\"ime_query_blocked\":true"'
+
   # shot
   out="$(run_dv shot --json -n 2 -o "$ST/out/shots")"; rc=$?
   check "shot --json -n 2" "$EX_OK" "$rc" \

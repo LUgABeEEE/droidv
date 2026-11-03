@@ -9,7 +9,7 @@ Gradle 出包、包/设备清单、无设备自测。纯 bash（少量 `python3`
 不改 `PATH` / rc。
 
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![version](https://img.shields.io/badge/version-0.1.4-informational.svg)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-0.1.5-informational.svg)](CHANGELOG.md)
 [![shell](https://img.shields.io/badge/shell-bash%204%2B-89e051.svg)](#安装)
 [![node](https://img.shields.io/badge/node-%E2%89%A522-339933.svg)](#安装)
 

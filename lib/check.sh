@@ -29,7 +29,7 @@ dv_cmd_check() {
 
   local devices model android sdk hyper webview focus
   devices="$(adbr devices -l | tail -n +2)"
-  model="$(adbq shell getprop ro.product.marketname | tr -d '\r')"
+  model="$(dv_device_model)"
   android="$(adbq shell getprop ro.build.version.release | tr -d '\r')"
   sdk="$(adbq shell getprop ro.build.version.sdk | tr -d '\r')"
   hyper="$(adbq shell getprop ro.mi.os.version.name | tr -d '\r')"

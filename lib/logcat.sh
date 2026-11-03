@@ -78,17 +78,34 @@ dv_cmd_logcat() {
   [ -n "$tag" ] && args+=(-s "$tag:$level")
   [ -z "$tag" ] && [ "$level" != "V" ] && args+=("*:$level")
   [ -n "$since" ] && args+=(-T "$since")
-  # 先多取一些，过滤后再截断，避免过滤后行数不足
-  args+=(-t "$((n * 6 + 200))")
 
-  local raw
+  local raw="" pid_server=""   # 必须初始化为空：set -u 下 raw+= 对未定义变量会直接崩
+  # 服务端按 pid 裁窗口：忙设备上目标进程的行会被全局 -t 窗口挤出（PR #1 实测：客户端过滤后 0 行仍报 ok）
+  [ -n "$pid" ] && [ "$all_pids" != "1" ] && [ "$follow" != "1" ] && pid_server="$pid"
+  if [ -n "$pid_server" ]; then
+    local p one
+    for p in $pid_server; do
+      one="$(adbq "${args[@]}" --pid="$p" -t "$((n * 3 + 50))" 2>/dev/null)"
+      [ -n "$one" ] && raw+="$one"$'\n'
+    done
+    if [ -z "$raw" ]; then
+      # 老设备 / 老 logcat 不认 --pid：退回全局取窗 + 客户端过滤
+      pid_server=""
+      raw="$(adbq "${args[@]}" -t "$((n * 6 + 200))" 2>/dev/null)"
+    elif [ "$(printf '%s' "$pid_server" | wc -w)" -gt 1 ]; then
+      raw="$(printf '%s\n' "$raw" | sort -s -k1,1 -k2,2)"   # 多个 pid 拼接后按时间归并
+    fi
+  elif [ "$follow" != "1" ]; then
+    raw="$(adbq "${args[@]}" -t "$((n * 6 + 200))" 2>/dev/null)"
+  fi
+
   if [ "$follow" = "1" ]; then
     # 持续模式：先给已有的 -n 行，再跟流（限时）
     raw="$(timeout "$follow_secs" "$ADB" ${SERIAL:+-s "$SERIAL"} logcat -v threadtime \
             ${tag:+-s "$tag:$level"} ${tag:+} 2>/dev/null | head -n "$((n * 50))")"
-  else
-    raw="$(adbq "${args[@]}" 2>/dev/null)"
   fi
+  # 注意：非 follow 路径的 raw 已在上面按 pid 取好，别再无条件重取一次
+  # （0.1.4 的坑：这里覆盖回全局取窗，--pid 白做，183k 行全拉回本地过滤）
   [ -n "$raw" ] || { warn "logcat 没有返回内容（缓冲区空或没有匹配）"; [ "$json" = "1" ] && printf '{"ok":true,"lines":0,"items":[]}\n'; return "$EX_OK"; }
 
   # 客户端过滤（pid）+ 截断
@@ -109,7 +126,8 @@ dv_cmd_logcat() {
       start = (c - n > 0) ? c - n + 1 : 1
       for (i = start; i <= c; i++) print buf[i]
     }')"
-  if [ "$pid_filter" = "1" ]; then
+  # 只在「退回客户端过滤」时才可能真的丢行；服务端 --pid 已经裁过窗口，不需要告警
+  if [ "$pid_filter" = "1" ] && [ -z "$pid_server" ]; then
     local total kept
     total=$(printf '%s\n' "$raw" | grep -cE '^[0-9][0-9]-[0-9][0-9] ' || true)
     kept=$(printf '%s\n' "$filtered" | grep -cE '^[0-9][0-9]-[0-9][0-9] ' || true)

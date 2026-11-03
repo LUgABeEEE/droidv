@@ -1,6 +1,6 @@
 {
   "name": "droidv",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Android device automation CLI: assert instead of screenshot. ADB + WebView CDP + UI tree, zero third-party deps.",
   "bin": { "dv": "dv" },
   "files": [

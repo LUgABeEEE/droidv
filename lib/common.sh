@@ -12,7 +12,7 @@ EX_VERIFY=6    # 校验失败（package / marker / install 被拒）
 EX_ENV=7       # 环境缺失（adb / SDK / node / JDK）
 EX_BUILD=8     # 构建失败（Gradle 返回非 0）—— 仅 dv build
 
-DV_VERSION="0.1.4"
+DV_VERSION="0.1.5"
 DV_HOME="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # ---------- 颜色 ----------
@@ -201,6 +201,12 @@ dv_activity() {
 
 dv_pkg_installed() { adbq shell "pm list packages $1" 2>/dev/null | grep -q "^package:$1$"; }
 
+# 机型名：marketname → model → vendor.model（MIUI/Redmi 上 ro.product.marketname 常为空，PR #1 发现 5）
+dv_device_model() {
+  adbq shell 'getprop ro.product.marketname; getprop ro.product.model; getprop ro.product.vendor.model' 2>/dev/null \
+    | tr -d '\r' | grep -m1 -v '^$'
+}
+
 dv_restart_app() {
   local act; act="$(dv_activity)"
   adbq shell "am force-stop $PKG" >/dev/null 2>&1
@@ -246,7 +252,7 @@ EOF
 
 # D：屏幕几何（跨设备诊断第一眼要看的东西）
 _dv_screen_json() {   # 打印 {"wm_size":"1200x2608","wm_density":"480","dpr":3.0,"css_viewport":"400x869"}
-  local sz dens w h dpr css_w css_h
+  local sz dens w h dpr css_w="" css_h=""   # 无设备时必须先初始化：否则 jstr "${css_w}x" 在 set -u 下崩（PR #1 发现 6）
   sz="$(adbq shell 'wm size' 2>/dev/null | sed -n 's/.*: \([0-9]*x[0-9]*\).*/\1/p' | tail -1)"
   dens="$(adbq shell 'wm density' 2>/dev/null | sed -n 's/.*: \([0-9]*\).*/\1/p' | tail -1)"
   [ -n "$dens" ] || dens=160

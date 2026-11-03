@@ -55,7 +55,7 @@ dv_cmd_doctor() {
 
   local adb_ok=1 adb_ver="" online=0 rc=0 model="" android="" sdk="" hyper="" pkg_rel=0 pkg_dbg=0
   local quota="" fwd="" focus="" serial="$SERIAL"
-  local ime_list="" ime_default="" show_hw="" ime_count=0 ime_ok=1
+  local ime_list="" ime_default="" show_hw="" ime_count=0 ime_ok=1 ime_blocked=0
 
   dv_resolve_adb 2>/dev/null || true   # B1：惰性解析（doctor 也要能在没设 DV_ADB 时用）
   adb_ver="$(timeout "$DV_ADB_TIMEOUT" "$ADB" version 2>/dev/null | head -1 | sed 's/Android Debug Bridge version //')"
@@ -82,7 +82,7 @@ dv_cmd_doctor() {
     serial="$SERIAL"
     if [ -n "$serial" ] && dv_online "$serial"; then
       online=1
-      model="$(adbq shell getprop ro.product.marketname 2>/dev/null | tr -d '\r')"
+      model="$(dv_device_model)"
       android="$(adbq shell getprop ro.build.version.release 2>/dev/null | tr -d '\r')"
       sdk="$(adbq shell getprop ro.build.version.sdk 2>/dev/null | tr -d '\r')"
       hyper="$(adbq shell getprop ro.mi.os.version.name 2>/dev/null | tr -d '\r')"
@@ -93,12 +93,22 @@ dv_cmd_doctor() {
       focus="$(dv_focus_line)"
       fwd="$(adbq forward --list 2>/dev/null)"
       # IME 基线（只告警，绝不擅自改）
-      ime_list="$(adbq shell 'ime list -s' 2>/dev/null | tr -d '\r' | grep -v '^$')"
+      local ime_raw
+      ime_raw="$(adbq shell 'ime list -s' 2>&1 | tr -d '\r')"
+      case "$ime_raw" in
+        *SecurityException*|*WRITE_SECURE_SETTINGS*|*"Permission denial"*)
+          ime_blocked=1; ime_list="" ;;   # ROM 限制：不是 dv 的失败，别当异常报
+        *) ime_list="$(printf '%s\n' "$ime_raw" | grep -v '^$')" ;;
+      esac
       ime_default="$(adbq shell 'settings get secure default_input_method' 2>/dev/null | tr -d '\r')"
       show_hw="$(adbq shell 'settings get secure show_ime_with_hard_keyboard' 2>/dev/null | tr -d '\r')"
       ime_count="$(printf '%s\n' "$ime_list" | grep -c . || true)"
-      [ "${ime_count:-0}" -lt 2 ] && ime_ok=0
-      printf '%s\n' "$ime_list" | grep -qxF "$ime_default" || ime_ok=0
+      if [ "$ime_blocked" = "1" ]; then
+        ime_ok=1      # 查不到就不下判断（MIUI 12.5 明确拒绝 ime list）
+      else
+        [ "${ime_count:-0}" -lt 2 ] && ime_ok=0
+        printf '%s\n' "$ime_list" | grep -qxF "$ime_default" || ime_ok=0
+      fi
     fi
   fi
 
@@ -122,10 +132,10 @@ except Exception: print("")' 2>/dev/null)"
     printf '"pair_device_count":%s,"forwards":%s,"focus":%s,' \
       "$(jnum "${quota:-}")" "$(jstr "$fwd")" "$(jstr "$focus")"
     printf '"screen":%s,' "$(_dv_screen_json)"
-    printf '"ime_count":%s,"ime_default":%s,"ime_list":%s,"ime_ok":%s,"show_ime_with_hard_keyboard":%s}\n' \
+    printf '"ime_count":%s,"ime_default":%s,"ime_list":%s,"ime_ok":%s,"ime_query_blocked":%s,"show_ime_with_hard_keyboard":%s}\n' \
       "$(jnum "${ime_count:-0}")" "$(jstr "$ime_default")" \
       "$(printf '%s' "$ime_list" | _ime_json_array 2>/dev/null || printf '[]')" \
-      "$(jbool "$ime_ok")" "$(jstr "$show_hw")"
+      "$(jbool "$ime_ok")" "$(jbool "$ime_blocked")" "$(jstr "$show_hw")"
     [ "$online" = "1" ] && return "$EX_OK" || return "$EX_NODEV"
   fi
 
@@ -160,7 +170,9 @@ except Exception: print("")' 2>/dev/null)"
       "$(printf '%s' "$scr" | python3 -c 'import json,sys;d=json.load(sys.stdin);print(d["wm_size"]+" @ "+d["wm_density"]+"dpi")' 2>/dev/null)" \
       "$(printf '%s' "$scr" | python3 -c 'import json,sys;print(json.load(sys.stdin)["dpr"])' 2>/dev/null)" \
       "$(printf '%s' "$scr" | python3 -c 'import json,sys;print(json.load(sys.stdin)["css_viewport"])' 2>/dev/null)"
-    if [ "$ime_ok" = "1" ]; then
+    if [ "$ime_blocked" = "1" ]; then
+      warn "IME        ROM 拒绝查询（SecurityException: WRITE_SECURE_SETTINGS）——跳过判断，不是 dv 的问题"
+    elif [ "$ime_ok" = "1" ]; then
       ok "IME        $ime_count 个启用，默认 $ime_default"
     elif [ "$ime_count" -ge 1 ] 2>/dev/null && printf '%s\n' "$ime_list" | grep -qxF "$ime_default"; then
       # 只有 1 个 IME 是合法基线（很多用户就只留一个），不算异常
