@@ -172,7 +172,14 @@ case "$cmd" in
         [ "${DV_FAKE_NO_INPUT_METHOD:-0}" = "1" ] || echo "  mServedView=com.example.app/.MainActivity" ;;
       *"wm size"*) echo "Physical size: ${DV_FAKE_WM_SIZE:-1200x2608}" ;;
       *"wm density"*) echo "Physical density: 400" ;;
-      *"dumpsys window"*) echo "  mCurrentFocus=Window{abc u0 ${DV_FAKE_PKG:-com.example.app}/.MainActivity}" ;;
+      *"dumpsys window"*)
+        if [ "${DV_FAKE_FOCUS_NEWFORM:-0}" = "1" ]; then
+          # Android 17 实测行序：mCurrentFocusedWindow 在前
+          echo "  mCurrentFocusedWindow = ${DV_FAKE_PKG:-com.example.app}"
+          echo "  mCurrentFocus=Window{abc u0 ${DV_FAKE_PKG:-com.example.app}/.MainActivity}"
+        else
+          echo "  mCurrentFocus=Window{abc u0 ${DV_FAKE_PKG:-com.example.app}/.MainActivity}"
+        fi ;;
       *"dumpsys webviewupdate"*) echo "  Current WebView package (name, version): (com.google.android.webview, 150.0)" ;;
       *"pidof"*) echo "12345" ;;
       *"/proc/net/unix"*) echo "0000000000000000: 00000002 00000000 00010000 0001 01 99999 @webview_devtools_remote_12345" ;;

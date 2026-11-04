@@ -12,7 +12,7 @@ EX_VERIFY=6    # 校验失败（package / marker / install 被拒）
 EX_ENV=7       # 环境缺失（adb / SDK / node / JDK）
 EX_BUILD=8     # 构建失败（Gradle 返回非 0）—— 仅 dv build
 
-DV_VERSION="0.1.5"
+DV_VERSION="0.1.6"
 DV_HOME="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # ---------- 颜色 ----------
@@ -184,8 +184,13 @@ dv_online() { [ "$(timeout "$DV_ADB_TIMEOUT" "$ADB" -s "$1" get-state 2>/dev/nul
 
 # 焦点里的包名
 dv_focus_pkg() {
-  adbq shell 'dumpsys window | grep -m1 mCurrentFocus' 2>/dev/null \
-    | sed -n 's/.*mCurrentFocus=Window{[^ ]* [^ ]* \([^ /}]*\).*/\1/p'
+  # 注意：Android 17 的 dump 里 `mCurrentFocusedWindow = <pkg>` 可能排在 `mCurrentFocus=Window{...}` **之前**，
+  # 而 "mCurrentFocus" 是它的子串 → 用 grep -m1 会命中错的那行、解析出空。两种形态都要认。
+  local out pkg
+  out="$(adbq shell "dumpsys window | grep -E 'mCurrentFocus=|mCurrentFocusedWindow'" 2>/dev/null | tr -d '\r')"
+  pkg="$(printf '%s\n' "$out" | sed -n 's/.*mCurrentFocus=Window{[^ ]* [^ ]* \([^ /}]*\).*/\1/p' | head -1)"
+  [ -n "$pkg" ] || pkg="$(printf '%s\n' "$out" | sed -n 's/.*mCurrentFocusedWindow *= *\([^ /}]*\).*/\1/p' | head -1)"
+  printf '%s' "$pkg"
 }
 dv_focus_line() {
   local l

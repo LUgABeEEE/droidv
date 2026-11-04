@@ -145,16 +145,18 @@ dv_cmd_peek() {
         printf '%s' "$cdp" | python3 -c 'import json,sys;d=json.load(sys.stdin);d["focus"]=sys.argv[1];d["fg"]=sys.argv[2];d["asleep"]=sys.argv[3]=="1";print(json.dumps(d,ensure_ascii=False,separators=(",",":")))' "$focus" "$fg" "$asleep"
         return "$EX_OK"
       fi
+      # 注意：f-string 里不能出现反斜杠转义（<3.12 直接 SyntaxError），用 % 格式化
       printf '%s' "$cdp" | python3 -c '
 import json, sys
 d = json.load(sys.stdin)
-print(f"dv peek  ·  {sys.argv[1]}  ·  CDP（WebView 内取数，~150 ms）")
+print("dv peek  ·  %s  ·  CDP（WebView 内取数，~150 ms）" % sys.argv[1])
 print("─" * 46)
-print(f"标题  {d[\"title\"] or \"(无)\"}    视口 {d[\"viewport\"]}    链接/按钮 {d[\"buttons\"]} · 输入框 {d[\"inputs\"]}")
+print("标题  %s    视口 %s    链接/按钮 %s · 输入框 %s"
+      % (d["title"] or "(无)", d["viewport"], d["buttons"], d["inputs"]))
 print("─" * 46)
-for l in d["text"]:
-    if l.strip():
-        print(" ", l[:100])
+for line in d["text"]:
+    if line.strip():
+        print(" ", line[:100])
 ' "$fg"
       return "$EX_OK"
     fi

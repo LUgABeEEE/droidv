@@ -158,6 +158,19 @@ PY
         return "$EX_OK"
       fi
       missing="$(comm -23 <(printf '%s\n' "$want_list" | sort) <(printf '%s\n' "$now_list" | sort) | tr '\n' ' ')"
+      # 实测坑：disable→enable 之后系统重新绑定 IME 需要时间，1 s 内常常只回来默认那个，
+      # 于是 restore 误报「仍缺 N 个」。这里对缺失项补 enable 并重试回读（最多 3 轮）。
+      local try=0 id2
+      while [ -n "$(printf '%s' "$missing" | tr -d ' ')" ] && [ "$try" -lt 3 ]; do
+        try=$((try + 1))
+        while IFS= read -r id2; do
+          [ -n "$id2" ] && adbq shell "ime enable $id2" >/dev/null 2>&1
+        done <<< "$missing"
+        [ -n "$want_json" ] && adbq shell "ime set $want_json" >/dev/null 2>&1
+        dv_sleep 2
+        now_list="$(_ime_enabled)"; now_def="$(_ime_default)"
+        missing="$(comm -23 <(printf '%s\n' "$want_list" | sort) <(printf '%s\n' "$now_list" | sort) | tr '\n' ' ')"
+      done
       extra="$(comm -13 <(printf '%s\n' "$want_list" | sort) <(printf '%s\n' "$now_list" | sort) | tr '\n' ' ')"
       local ok_flag=0
       [ -z "$missing" ] && [ -z "$extra" ] && [ "$now_def" = "$want_json" ] && ok_flag=1

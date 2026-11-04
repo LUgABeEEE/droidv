@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # dv —— 安卓开发者模式自动化调试工具（单一入口）
-# 版本 0.1.5 · 设备侧全部通过 adb；不写系统路径、不改 PATH/rc
+# 版本 0.1.6 · 设备侧全部通过 adb；不写系统路径、不改 PATH/rc
 set -uo pipefail
 
 # Windows/MSYS 主机：别让 shell 把设备侧路径改写成本机路径（/data/local/tmp/x → C:/Program Files/Git/...）

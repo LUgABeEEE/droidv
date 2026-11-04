@@ -9,7 +9,7 @@ Gradle 出包、包/设备清单、无设备自测。纯 bash（少量 `python3`
 不改 `PATH` / rc。
 
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![version](https://img.shields.io/badge/version-0.1.5-informational.svg)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-0.1.6-informational.svg)](CHANGELOG.md)
 [![shell](https://img.shields.io/badge/shell-bash%204%2B-89e051.svg)](#安装)
 [![node](https://img.shields.io/badge/node-%E2%89%A522-339933.svg)](#安装)
 
@@ -270,12 +270,13 @@ dv peek --no-cdp             # 强制走 UI 树
 | `doctor` / `check` / `devices` / `packages` / `ime` / `shot` / `uitree` / `wait-until` / `logcat` / `crash` / `perf` / `lock` / `npu` / `adb` | **真机已验证** | 2026-11-02，两台设备（见上），含成功路径与失败路径（`wait-until` 超时 → 4；`adb -- reboot` 被拒 → 2；`lock` 争用 → 3） |
 | `cycle` | **真机已验证**（平板 `.debug`） | 两次 `exit 5`（无 CDP 时的正确结果），产物齐全、`forward --list` 前后为空（无泄漏）；手机未跑 |
 | `build --variant debug` | **真机已验证**（主机侧行为，不需要设备） | 手机 6684 ms、平板同工程 7524 ms → 9.46 MB；`release` 无签名 → `exit 6` |
-| `install` | 有条件已验证（平板） | 默认 `DV_INSTALL_TAP=none` 不自动点；显式 `DV_INSTALL_TAP="1060,1224"`（横屏 3408×2272）→ **1.24 s 成功**；手机坐标未量 |
+| `install` | **真机已验证**（平板 USB，2026-11-04） | 默认 `DV_INSTALL_TAP=none` 不自动点；弹窗按钮位置**随弹窗类型变**：旧布局 `1060,1224`、2026-11-04 实测「USB安装提示」为 `1493,1410`（3408×2272 横屏）→ 安装成功、`dv packages` 确认；手机坐标未量 |
 | `input` | 真机已验证（`tap` 路径 + 失败路径） | 平板 `input tap --text 局域网访问` → 0，打印 `(1704,528) px = (681.6,211.2) css [dpr=2.5]`；`tap` 找不到 → 4；`text 中文` → 2 |
 | `cdp` | **历史已验证 / 今日未复跑** | 历史：t7 三段全通（socket + `/json/version` + WS `Runtime.evaluate`，Android 17 / 无线调试）；今日两侧都因**配对需人参与**未复跑；release 包上 `cdp version` 正确 `exit 5` |
-| `input text <ASCII>` 正向输入到真实会话 | 未验证 | 今日实测时页面没有输入框（旧版假成功，现已改为无输入框 → `exit 4`） |
-| `build --install` 到手机 | 未验证 | 平板已验证（`--install` 复用同一套安装逻辑） |
-| `--retry` | 未验证 | 只对 `4`/`6` 生效；真机只跑过一次「无 flaky」 |
+| `peek`（CDP + UI 树两条后端） | **真机已验证**（平板 USB，2026-11-04） | 同一屏：CDP 分支 **0.48 s / 1,462 B**（WebView `innerText`）；`--no-cdp` 2.40 s / 3,385 B；原始 XML 55 KB / 截图 411 KB。锁屏态 → `exit 4` + 唤醒提示 |
+| `input text <ASCII>` 正向输入到真实会话 | **真机已验证**（平板 USB，2026-11-04） | 设置搜索框（`miuix...ClearableEditText`）：`dv input tap --xy 520,147` + `dv input text wifi` → 回读 `text="wifiabc"`。**回读要用 `uiautomator dump`/`uitree`，紧跟着 `peek` 可能读到上一帧**；非 ASCII → `exit 2` |
+| `build --install` | **真机已验证**（平板 USB，2026-11-04） | 最小 AGP 工程：`dv build --project … --variant debug --install` → 构建 5.9 s / 873,156 B → 安装成功 → `dv packages` 确认 → 已卸载。**手机仍未测**（未连 USB） |
+| `--retry` | **真机已验证**（重试循环，2026-11-04） | `dv --retry 2 --pkg com.android.browser uitree --json` → 首轮 `exit 4` → 打印「第 1 次失败（exit 4），按 --retry 重试」→ 终态 `exit 4`、`attempts:2`；正常路径 `attempts:1` 不重试。**「flaky 后成功」仍未构造出来** |
 
 > 这张表只写「谁在什么设备上跑过」。**不要**为了表格好看把「未验证」改成「已验证」；补一条就按
 > `docs/verification.md` 的模板交（设备型号 + 系统 + transport + 日期 + 命令 + 退出码 + 10–30 行输出）。

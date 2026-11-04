@@ -9,6 +9,22 @@
 流程 DSL（`dv run flow.yaml`）、录制回放、自带 MCP server、设备农场、ADB 协议重实现、视频流/输入注入引擎、
 OCR 断言、APK badging 解析 —— 理由与替代方案见 README「明确不做」一节。
 
+## [0.1.6] — 2026-11-04
+
+2026-11-04 真机验证（平板 USB）抓到的 3 个 bug，以及验证表的补全：
+
+- **`peek` 的 CDP 分支从未触发**：`dv_focus_pkg` 用 `grep -m1 mCurrentFocus` 取焦点行，但 Android 17 的 dump 里
+  `mCurrentFocusedWindow = <pkg>` 排在前面、而 `mCurrentFocus` 是它的**子串** → 解析出空包名 → `peek` 永远退到 UI 树。
+  现在两种行形态都认（`mCurrentFocus=Window{…}` 优先，回退 `mCurrentFocusedWindow = …`）。
+- **CDP 分支的显示层一跑就崩**：那段 python 在 f-string 里用了反斜杠转义（`f"{d[\"title\"]}"`），<3.12 直接 `SyntaxError`。
+  该分支此前从未被执行过（被上一条 bug 挡住），属潜伏 bug；改成 `%` 格式化。
+- **`ime restore` 误报「仍缺 N 个」**：`disable` → `enable` 之后系统重新绑定 IME 需要时间，1 s 内回读常常只回来默认那个。
+  现在对缺失项补 `enable` 并最多重试 3 轮回读（实测：手动 `ime enable` 立刻生效，说明是时序不是权限）。
+- **README 验证表补全**：`input text <ASCII>` 正向输入、`build --install`（最小 AGP 工程，构建 5.9 s + 安装成功）、
+  `--retry` 重试循环三条从「未验证」改为真机已验证；新增 `peek` 一行（CDP 0.48 s/1,462 B vs 树 2.40 s/3,385 B）。
+- `install` 的弹窗坐标补充：**按钮位置随弹窗类型变**，2026-11-04「USB安装提示」实测 `1493,1410`（旧记录 `1060,1224`）。
+- `selftest` 110 → 111（Android 17 焦点行序）。
+
 ## [0.1.5] — 2026-11-04
 
 社区真机验证（PR #1：Xiaomi Redmi Note 8 / MIUI 12.5 / Android 11 / Windows 主机）暴露的 6 个问题：

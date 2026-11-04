@@ -153,6 +153,10 @@ XML
   out="$(DV_FAKE_UI_ALWAYS_FAIL=1 DV_FAKE_DUMP_FAIL=0 run_dv peek --no-cdp --json)"; rc=$?
   check "peek 取不到 UI 树 → 4" "$EX_DATA" "$rc"
 
+  # 焦点包名解析：Android 17 的 dump 里 mCurrentFocusedWindow 排在前面（是 mCurrentFocus 的子串）
+  out="$(DV_FAKE_FOCUS_NEWFORM=1 DV_FAKE_DUMP_FAIL=0 run_dv --json peek --no-cdp)"; rc=$?
+  check "焦点包名：Android 17 行序（mCurrentFocusedWindow 在前）" "$EX_OK" "$rc" 'printf "%s" "$out" | grep -q "\"fg\":\"com.example.app\""'
+
   # PR #1（Redmi Note 8 / MIUI 12.5 / Android 11）暴露的三条差异
   out="$(DV_FAKE_NO_MARKETNAME=1 run_dv check --json)"; rc=$?
   check "机型回退链：marketname 空 → model" "$EX_OK" "$rc" 'printf "%s" "$out" | grep -q "Redmi Note 8"'
